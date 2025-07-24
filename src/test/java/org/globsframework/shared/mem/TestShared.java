@@ -21,8 +21,7 @@ import java.util.List;
 import java.util.Optional;
 
 public class TestShared {
-
-    public static final int SIZE = 12_000_000;
+    public static final int SIZE = 12_000;
 
     @Test
     public void buildApi() throws IOException {

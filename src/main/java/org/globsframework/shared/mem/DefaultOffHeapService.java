@@ -25,6 +25,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.rmi.RemoteException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -107,7 +108,7 @@ public class DefaultOffHeapService implements OffHeapService {
         public void save(Collection<Glob> globs) throws IOException {
             final Map<String, Glob> allStrings = createStringsFile(globs, offHeapTypeInfo, path.resolve(STRINGS_DATA));
 
-            final IdentityHashMap<Glob, Integer> offsetPerData =
+            final IdentityHashMap<Glob, Long> offsetPerData =
                     saveData(path.resolve(CONTENT_DATA), offHeapTypeInfo, globs, MIN_SIZE, allStrings);
 
             for (Map.Entry<String, OffHeapIndex> entry : index.entrySet()) {
@@ -134,14 +135,14 @@ public class DefaultOffHeapService implements OffHeapService {
                 AtomicInteger nbElement = new AtomicInteger(0);
                 scan(root, node1Elements -> node1Elements.order = nbElement.getAndIncrement());
 
-                IndexTypeBuilder indexTypeBuilder = new IndexTypeBuilder(indexName, keyFields);
+                UniqueIndexTypeBuilder indexTypeBuilder = new UniqueIndexTypeBuilder(indexName, keyFields);
 
                 List<Glob> indexGlobs = new ArrayList<>();
                 final long groupSize = indexTypeBuilder.offHeapIndexTypeInfo.groupLayout.byteSize();
                 scan(root, node1Elements -> {
                     final MutableGlob index = indexTypeBuilder.indexType.instantiate();
                     final Map.Entry<FunctionalKey, Glob> currentData = orderedData[node1Elements.indice1];
-                    index.set(indexTypeBuilder.dataOffset1, offsetPerData.get(currentData.getValue()));
+                    index.set(indexTypeBuilder.dataOffset1, Math.toIntExact(offsetPerData.get(currentData.getValue())));
                     index.set(indexTypeBuilder.offsetVal1, node1Elements.val1 != null ? node1Elements.val1.order : -1);
                     index.set(indexTypeBuilder.offsetVal2, node1Elements.val2 != null ? node1Elements.val2.order : -1);
                     for (int j = 0; j < keyFields.length; j++) {
@@ -201,33 +202,117 @@ public class DefaultOffHeapService implements OffHeapService {
             return allStrings;
         }
 
-        private static IdentityHashMap<Glob, Integer> saveData(Path pathToFile, OffHeapTypeInfo offHeapTypeInfo1,
+        interface Save {
+            void saveInArray(Glob data, MemorySegment memorySegment, long offset, long index, SaveContext saveContext);
+
+            void readInArray(MutableGlob data, MemorySegment memorySegment, long offset, long index, ReadContext readContext);
+
+            Object get(MemorySegment memorySegment, long offset, long index, ReadContext readContext);
+        }
+
+        interface StringAddrAccessor {
+            Glob get(String str);
+        }
+
+        record SaveContext(StringAddrAccessor stringAddrAccessor){
+        }
+
+        interface AddrStringAccessor {
+            String get(int offset, int length);
+        }
+
+        record ReadContext(AddrStringAccessor addrStringAccessor){
+        }
+
+        static class AnyFieldSave implements Save {
+            private final VarHandle arrayHandle;
+            private final Field field;
+
+            public AnyFieldSave(VarHandle arrayHandle, Field field) {
+                this.arrayHandle = arrayHandle;
+                this.field = field;
+            }
+
+            public static Save create(GroupLayout groupLayout, Field field) {
+                return new AnyFieldSave(groupLayout.arrayElementVarHandle(MemoryLayout.PathElement.groupElement(field.getName())), field);
+            }
+
+            @Override
+            public void saveInArray(Glob data, MemorySegment memorySegment, long offset, long index, SaveContext saveContext) {
+                arrayHandle.set(memorySegment, offset, index, data.getValue(field));
+            }
+
+            @Override
+            public void readInArray(MutableGlob data, MemorySegment memorySegment, long offset, long index, ReadContext readContext) {
+                data.setValue(field, arrayHandle.get(memorySegment, offset, index));
+            }
+
+            @Override
+            public Object get(MemorySegment memorySegment, long offset, long index, ReadContext readContext) {
+                return arrayHandle.get(memorySegment, offset, index);
+            }
+        }
+
+        static class StringFieldSave implements Save {
+            private final StringField stringField;
+            private final VarHandle arrayLenHandle;
+            private final VarHandle arrayAddrHandle;
+
+            StringFieldSave(StringField stringField, VarHandle arrayLenHandle, VarHandle arrayAddrHandle) {
+                this.stringField = stringField;
+                this.arrayLenHandle = arrayLenHandle;
+                this.arrayAddrHandle = arrayAddrHandle;
+            }
+
+            public static StringFieldSave create(GroupLayout groupLayout, StringField stringField) {
+                final VarHandle addHandle = groupLayout.arrayElementVarHandle(MemoryLayout.PathElement.groupElement(stringField.getName() + SUFFIX_ADDR));
+                final VarHandle lenHandle = groupLayout.arrayElementVarHandle(MemoryLayout.PathElement.groupElement(stringField.getName() + SUFFIX_LEN));
+                return new StringFieldSave(stringField, lenHandle, addHandle);
+            }
+
+            @Override
+            public void saveInArray(Glob data, MemorySegment memorySegment, long offset, long index, SaveContext saveContext) {
+                final String str = data.get(stringField);
+                final Glob stringAddress = saveContext.stringAddrAccessor().get(str);
+                arrayLenHandle.set(memorySegment, offset, (long) index, stringAddress.get(StringRefType.len));
+                arrayAddrHandle.set(memorySegment, offset, (long) index, stringAddress.get(StringRefType.offset));
+            }
+
+            @Override
+            public void readInArray(MutableGlob data, MemorySegment memorySegment, long offset, long index, ReadContext readContext) {
+                int addr = (int) arrayAddrHandle.get(memorySegment, (long) offset, index);
+                int len = (int) arrayLenHandle.get(memorySegment, (long) offset, index);
+                data.set(stringField, readContext.addrStringAccessor().get(addr, len));
+            }
+
+            @Override
+            public Object get(MemorySegment memorySegment, long offset, long index, ReadContext readContext) {
+                int addr = (int) arrayAddrHandle.get(memorySegment, (long) offset, index);
+                int len = (int) arrayLenHandle.get(memorySegment, (long) offset, index);
+                return readContext.addrStringAccessor().get(addr, len);
+            }
+        }
+
+        private static IdentityHashMap<Glob, Long> saveData(Path pathToFile, OffHeapTypeInfo offHeapTypeInfo1,
                                                                Collection<Glob> globs, int bufferSize, Map<String, Glob> allStrings) throws IOException {
 
             final MemorySegment memorySegment;
-            IdentityHashMap<Glob, Integer> offsets = new IdentityHashMap<>();
+            IdentityHashMap<Glob, Long> offsets = new IdentityHashMap<>();
             try (Arena arena = Arena.ofConfined()) {
                 final int groupSize = Math.toIntExact(offHeapTypeInfo1.groupLayout.byteSize());
                 memorySegment = arena.allocate(groupSize * bufferSize);
+                final SaveContext saveContext = new SaveContext(allStrings::get);
 
                 try (FileChannel open = FileChannel.open(pathToFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)) {
-                    int i = 0;
-                    final Field[] fields = offHeapTypeInfo1.fields;
+                    long i = 0;
                     for (Glob glob : globs) {
                         if (offHeapTypeInfo1.type != glob.getType()) {
-                            log.error("Bad type " + offHeapTypeInfo1.type.getName() + " but got " + glob.getType().getName());
+                            final String s = "Bad type " + offHeapTypeInfo1.type.getName() + " but got " + glob.getType().getName();
+                            log.error(s);
+                            throw new RemoteException(s);
                         }
-                        for (int j = 0; j < fields.length; j++) {
-                            if (fields[j] instanceof StringField stringField) {
-                                final String str = glob.get(stringField);
-                                final Glob index = allStrings.get(str);
-                                offHeapTypeInfo1.arrayStringLenHandles[j]
-                                        .set(memorySegment, 0L, (long) i, index.get(StringRefType.len));
-                                offHeapTypeInfo1.arrayStringAddrHandles[j]
-                                        .set(memorySegment, 0L, (long) i, index.get(StringRefType.offset));
-                            } else {
-                                offHeapTypeInfo1.arrayFieldHandles[j].set(memorySegment, 0L, (long) i, glob.getValue(fields[j]));
-                            }
+                        for (Save save : offHeapTypeInfo1.save) {
+                            save.saveInArray(glob, memorySegment, 0L, i, saveContext);
                         }
                         offsets.put(glob, i);
                         i++;
@@ -238,7 +323,7 @@ public class DefaultOffHeapService implements OffHeapService {
                     }
                     if (i != 0) {
                         final ByteBuffer byteBuffer = memorySegment.asByteBuffer();
-                        byteBuffer.limit(i * groupSize);
+                        byteBuffer.limit(Math.toIntExact(i * groupSize));
                         open.write(byteBuffer);
                     }
                 }
@@ -301,6 +386,7 @@ public class DefaultOffHeapService implements OffHeapService {
         private final IntHashMap<String> readStrings = new IntHashMap<>();
         private final Map<String, DefaultReadOffHeapIndex> indexMap;
         private final MemorySegment memorySegment;
+        private final DefaultOffHeapWriteService.ReadContext readContext;
         private byte[] cache = new byte[1024];
 
         public DefaultOffHeapReadService(Path directory, Arena arena, OffHeapTypeInfo offHeapTypeInfo, Map<String, OffHeapIndex> index) throws IOException {
@@ -317,7 +403,7 @@ public class DefaultOffHeapService implements OffHeapService {
             memorySegment = dataChannel.map(FileChannel.MapMode.READ_ONLY,
                     0,
                     count * offHeapTypeInfo.groupLayout.byteSize(), arena);
-
+            readContext = new DefaultOffHeapWriteService.ReadContext(this::get);
         }
 
         @Override
@@ -327,38 +413,24 @@ public class DefaultOffHeapService implements OffHeapService {
 
         @Override
         public void readAll(Consumer<Glob> consumer) throws IOException {
-            Field[] fields = offHeapTypeInfo.fields;
-
             for (int i = 0; i < count; i++) {
-                final MutableGlob instantiate = readArrayGlob(fields, memorySegment, (long) i);
+                final MutableGlob instantiate = readArrayGlob(memorySegment, (long) i, readContext);
                 consumer.accept(instantiate);
             }
         }
 
-        private MutableGlob readArrayGlob(Field[] fields, MemorySegment memorySegment, long i) {
+        private MutableGlob readArrayGlob(MemorySegment memorySegment, long i, DefaultOffHeapWriteService.ReadContext readContext) {
             final MutableGlob instantiate = offHeapTypeInfo.type.instantiate();
-            for (int j = 0; j < fields.length; j++) {
-                Field field = fields[j];
-                if (field instanceof StringField stringField) {
-                    int addr = (int) offHeapTypeInfo.arrayStringAddrHandles[j].get(memorySegment, (long) 0, i);
-                    int len = (int) offHeapTypeInfo.arrayStringLenHandles[j].get(memorySegment, (long) 0, i);
-                    instantiate.set(stringField, get(addr, len));
-//                } else if (field instanceof GlobField globField) {
-//                    instantiate.set(globField,
-//                            readGlob(memorySegment.asSlice(i * offHeapTypeInfo.groupLayout.byteSize(),
-//                                    offHeapTypeInfo.globFieldTypeInfo[j].groupLayout.byteSize()), offHeapTypeInfo.globFieldTypeInfo[j]));
-                } else {
-                    instantiate.setValue(field,
-                            offHeapTypeInfo.arrayFieldHandles[j].get(memorySegment, (long) 0, i));
-                }
+            for (DefaultOffHeapWriteService.Save save : offHeapTypeInfo.save) {
+                save.readInArray(instantiate, memorySegment, 0L, i, readContext);
             }
             return instantiate;
         }
 
         @Override
         public Optional<Glob> read(OffHeapRef offHeapRef) {
-            final MutableGlob instantiate = readArrayGlob(offHeapTypeInfo.fields, memorySegment,
-                    ((DefaultReadOffHeapIndex.DefaultOffHeapRef) offHeapRef).dataIndex);
+            final MutableGlob instantiate =
+                    readArrayGlob(memorySegment, ((DefaultReadOffHeapIndex.DefaultOffHeapRef) offHeapRef).dataIndex, readContext);
             return Optional.of(instantiate);
         }
 
@@ -381,15 +453,17 @@ public class DefaultOffHeapService implements OffHeapService {
             private final StringAccessorByAdd stringAccessor;
             private final FileChannel indexChannel;
             private final MemorySegment memorySegment;
-            private IndexTypeBuilder indexTypeBuilder;
+            private final DefaultOffHeapWriteService.ReadContext readContext;
+            private UniqueIndexTypeBuilder indexTypeBuilder;
 
             public DefaultReadOffHeapIndex(Path path, OffHeapIndex offHeapIndex, StringAccessorByAdd stringAccessor) throws IOException {
                 this.offHeapIndex = offHeapIndex;
                 this.stringAccessor = stringAccessor;
                 final String indexName = offHeapIndex.getName();
-                indexTypeBuilder = new IndexTypeBuilder(indexName, offHeapIndex.getKeyBuilder().getFields());
+                indexTypeBuilder = new UniqueIndexTypeBuilder(indexName, offHeapIndex.getKeyBuilder().getFields());
                 this.indexChannel = FileChannel.open(path.resolve(getIndexNameFile(indexName)), StandardOpenOption.READ);
                 memorySegment = indexChannel.map(FileChannel.MapMode.READ_ONLY, 0, indexChannel.size(), Arena.ofShared());
+                readContext = new DefaultOffHeapWriteService.ReadContext(stringAccessor::get);
             }
 
             public OffHeapRef find(FunctionalKey functionalKey) {
@@ -422,24 +496,14 @@ public class DefaultOffHeapService implements OffHeapService {
 
             private int compare(OffHeapTypeInfo offHeapIndexTypeInfo, FunctionalKey functionalKey, int index) {
                 Field[] fields = indexTypeBuilder.keyFields;
-                for (int i = 0; i < fields.length; i++) {
-                    Field field = fields[i];
-                    if (field instanceof StringField stringField) {
-                        final String data = functionalKey.get(stringField);
-                        int addr = (int) offHeapIndexTypeInfo.arrayStringAddrHandles[i].get(memorySegment, (long) 0, index);
-                        int len = (int) offHeapIndexTypeInfo.arrayStringLenHandles[i].get(memorySegment, (long) 0, index);
-                        final String s = stringAccessor.get(addr, len);
-                        final int cmp = Utils.compare(data, s);
-                        if (cmp != 0) {
-                            return cmp;
-                        }
-                    } else {
-                        final Comparable value = (Comparable) functionalKey.getValue(field);
-                        final Object o = offHeapIndexTypeInfo.arrayFieldHandles[i].get(memorySegment, (long) 0, index);
-                        int cmp = Utils.compare(value, o);
-                        if (cmp != 0) {
-                            return cmp;
-                        }
+                DefaultOffHeapWriteService.Save[] saves = indexTypeBuilder.saves;
+                for (int i = 0; i < saves.length; i++) {
+                    DefaultOffHeapWriteService.Save save = saves[i];
+                    final Comparable value = (Comparable) functionalKey.getValue(fields[i]);
+                    final Object o1 = save.get(memorySegment, 0, index, readContext);
+                    final int cmp = Utils.compare(value, o1);
+                    if (cmp != 0) {
+                        return cmp;
                     }
                 }
                 return 0;
@@ -483,41 +547,28 @@ public class DefaultOffHeapService implements OffHeapService {
     static class OffHeapTypeInfo {
         private final GlobType type;
         private final GroupLayout groupLayout;
-        private final VarHandle[] fieldsToVarHandles;
-        private final VarHandle[] stringFieldLenHandles;
-        private final VarHandle[] stringFieldAddrHandles;
+        private final DefaultOffHeapWriteService.Save[] save;
         private final VarHandle[] arrayFieldHandles;
         private final VarHandle[] arrayStringAddrHandles;
         private final VarHandle[] arrayStringLenHandles;
-        //        private final VarHandle[] globFieldHandles;
-//        public final OffHeapTypeInfo[] globFieldTypeInfo;
         private final Field[] fields;
 
         public OffHeapTypeInfo(GlobType type) {
             this.type = type;
             fields = type.getFields();
-            fieldsToVarHandles = new VarHandle[fields.length];
-            stringFieldLenHandles = new VarHandle[fields.length];
-            stringFieldAddrHandles = new VarHandle[fields.length];
             final var groupLayoutAbstractFieldVisitor = new GroupLayoutAbstractFieldVisitor();
             for (Field field : fields) {
                 field.safeAccept(groupLayoutAbstractFieldVisitor);
             }
             groupLayout = groupLayoutAbstractFieldVisitor.createGroupLayout();
+            save = new DefaultOffHeapWriteService.Save[fields.length];
             for (int i = 0; i < fields.length; i++) {
                 Field field = fields[i];
                 if (field instanceof StringField) {
-                    stringFieldAddrHandles[i] =
-                            groupLayout.varHandle(MemoryLayout.PathElement.groupElement(field.getName() + SUFFIX_ADDR));
-                    stringFieldLenHandles[i] =
-                            groupLayout.varHandle(MemoryLayout.PathElement.groupElement(field.getName() + SUFFIX_LEN));
+                    save[i] = DefaultOffHeapWriteService.StringFieldSave.create(groupLayout, (StringField) field);
                 }
-//                else if (field instanceof GlobField) {
-//                    globFieldHandles[i] = groupLayout.varHandle(MemoryLayout.PathElement.groupElement(field.getName()),
-//                            MemoryLayout.PathElement.dereferenceElement())
-//                }
                 else {
-                    fieldsToVarHandles[i] = groupLayout.varHandle(MemoryLayout.PathElement.groupElement(field.getName()));
+                    save[i] = DefaultOffHeapWriteService.AnyFieldSave.create(groupLayout, field);
                 }
             }
             this.arrayFieldHandles = new VarHandle[type.getFieldCount()];
@@ -537,9 +588,10 @@ public class DefaultOffHeapService implements OffHeapService {
         }
     }
 
-    static class IndexTypeBuilder {
+    static class UniqueIndexTypeBuilder {
         private final Field[] indexFields;
         private final Field[] keyFields;
+        private final DefaultOffHeapWriteService.Save[] saves;
         private final IntegerField[] strArr;
         private final IntegerField[] strLen;
         private final IntegerField dataOffset1;
@@ -551,8 +603,9 @@ public class DefaultOffHeapService implements OffHeapService {
         private final VarHandle indexOffset1ArrayHandle;
         private final VarHandle indexOffset2ArrayHandle;
 
-        public IndexTypeBuilder(String indexName, Field[] keyFields) {
+        public UniqueIndexTypeBuilder(String indexName, Field[] keyFields) {
             this.keyFields = keyFields;
+            saves = new DefaultOffHeapWriteService.Save[keyFields.length];
             final GlobTypeBuilder keyTypeBuilder = GlobTypeBuilderFactory.create(indexName);
             indexFields = new Field[keyFields.length];
             strArr = new IntegerField[keyFields.length];
@@ -572,6 +625,17 @@ public class DefaultOffHeapService implements OffHeapService {
             offsetVal2 = keyTypeBuilder.declareIntegerField("indexOffset2");
             indexType = keyTypeBuilder.get();
             offHeapIndexTypeInfo = new OffHeapTypeInfo(indexType);
+
+            for (int i = 0; i < keyFields.length; i++) {
+                Field keyField = keyFields[i];
+                if (keyField instanceof StringField stringField) {
+                    saves[i] = DefaultOffHeapWriteService.StringFieldSave.create(offHeapIndexTypeInfo.groupLayout, stringField);
+                }
+                else {
+                    saves[i] = DefaultOffHeapWriteService.AnyFieldSave.create(offHeapIndexTypeInfo.groupLayout, keyField);
+                }
+            }
+
             dataOffsetArrayHandle = offHeapIndexTypeInfo.groupLayout.arrayElementVarHandle(MemoryLayout.PathElement.groupElement("dataOffset1"));
             indexOffset1ArrayHandle = offHeapIndexTypeInfo.groupLayout.arrayElementVarHandle(MemoryLayout.PathElement.groupElement("indexOffset1"));
             indexOffset2ArrayHandle = offHeapIndexTypeInfo.groupLayout.arrayElementVarHandle(MemoryLayout.PathElement.groupElement("indexOffset2"));
