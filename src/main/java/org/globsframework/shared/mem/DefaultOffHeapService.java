@@ -234,7 +234,8 @@ public class DefaultOffHeapService implements OffHeapService {
             }
 
             public static Save create(GroupLayout groupLayout, Field field) {
-                return new AnyFieldSave(groupLayout.arrayElementVarHandle(MemoryLayout.PathElement.groupElement(field.getName())), field);
+                return new AnyFieldSave(groupLayout.arrayElementVarHandle(MemoryLayout.PathElement.groupElement(field.getName())),
+                        field);
             }
 
             @Override
@@ -454,7 +455,7 @@ public class DefaultOffHeapService implements OffHeapService {
             private final FileChannel indexChannel;
             private final MemorySegment memorySegment;
             private final DefaultOffHeapWriteService.ReadContext readContext;
-            private UniqueIndexTypeBuilder indexTypeBuilder;
+            private final UniqueIndexTypeBuilder indexTypeBuilder;
 
             public DefaultReadOffHeapIndex(Path path, OffHeapIndex offHeapIndex, StringAccessorByAdd stringAccessor) throws IOException {
                 this.offHeapIndex = offHeapIndex;
@@ -467,12 +468,11 @@ public class DefaultOffHeapService implements OffHeapService {
             }
 
             public OffHeapRef find(FunctionalKey functionalKey) {
-                final OffHeapTypeInfo offHeapIndexTypeInfo = indexTypeBuilder.offHeapIndexTypeInfo;
-                return binSearch(functionalKey, offHeapIndexTypeInfo, 0);
+                return binSearch(functionalKey, 0);
             }
 
-            private DefaultOffHeapRef binSearch(FunctionalKey functionalKey, OffHeapTypeInfo offHeapIndexTypeInfo, int indexOffset) {
-                int compare = compare(offHeapIndexTypeInfo, functionalKey, indexOffset);
+            private DefaultOffHeapRef binSearch(FunctionalKey functionalKey, int indexOffset) {
+                int compare = compare(functionalKey, indexOffset);
                 if (compare == 0) {
                     return new DefaultOffHeapRef(
                             (Integer) indexTypeBuilder.dataOffsetArrayHandle.get(memorySegment, 0L, indexOffset));
@@ -480,21 +480,21 @@ public class DefaultOffHeapService implements OffHeapService {
                 if (compare < 0) {
                     int index = (Integer) indexTypeBuilder.indexOffset1ArrayHandle.get(memorySegment, 0L, indexOffset);
                     if (index >= 0) {
-                        return binSearch(functionalKey, offHeapIndexTypeInfo, index);
+                        return binSearch(functionalKey, index);
                     } else {
                         return null;
                     }
                 } else {
                     int index = (Integer) indexTypeBuilder.indexOffset2ArrayHandle.get(memorySegment, 0L, indexOffset);
                     if (index >= 0) {
-                        return binSearch(functionalKey, offHeapIndexTypeInfo, index);
+                        return binSearch(functionalKey, index);
                     } else {
                         return null;
                     }
                 }
             }
 
-            private int compare(OffHeapTypeInfo offHeapIndexTypeInfo, FunctionalKey functionalKey, int index) {
+            private int compare(FunctionalKey functionalKey, int index) {
                 Field[] fields = indexTypeBuilder.keyFields;
                 DefaultOffHeapWriteService.Save[] saves = indexTypeBuilder.saves;
                 for (int i = 0; i < saves.length; i++) {
@@ -548,9 +548,6 @@ public class DefaultOffHeapService implements OffHeapService {
         private final GlobType type;
         private final GroupLayout groupLayout;
         private final DefaultOffHeapWriteService.Save[] save;
-        private final VarHandle[] arrayFieldHandles;
-        private final VarHandle[] arrayStringAddrHandles;
-        private final VarHandle[] arrayStringLenHandles;
         private final Field[] fields;
 
         public OffHeapTypeInfo(GlobType type) {
@@ -569,20 +566,6 @@ public class DefaultOffHeapService implements OffHeapService {
                 }
                 else {
                     save[i] = DefaultOffHeapWriteService.AnyFieldSave.create(groupLayout, field);
-                }
-            }
-            this.arrayFieldHandles = new VarHandle[type.getFieldCount()];
-            this.arrayStringAddrHandles = new VarHandle[type.getFieldCount()];
-            this.arrayStringLenHandles = new VarHandle[type.getFieldCount()];
-            for (int i = 0; i < fields.length; i++) {
-                if (fields[i] instanceof StringField) {
-                    arrayStringLenHandles[i] =
-                            groupLayout.arrayElementVarHandle(MemoryLayout.PathElement.groupElement(fields[i].getName() + SUFFIX_LEN));
-                    arrayStringAddrHandles[i] =
-                            groupLayout.arrayElementVarHandle(MemoryLayout.PathElement.groupElement(fields[i].getName() + SUFFIX_ADDR));
-                } else {
-                    arrayFieldHandles[i] =
-                            groupLayout.arrayElementVarHandle(MemoryLayout.PathElement.groupElement(fields[i].getName()));
                 }
             }
         }
