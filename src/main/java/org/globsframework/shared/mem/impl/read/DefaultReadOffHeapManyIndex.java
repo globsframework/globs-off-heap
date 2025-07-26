@@ -1,0 +1,101 @@
+package org.globsframework.shared.mem.impl.read;
+
+import org.globsframework.core.functional.FunctionalKey;
+import org.globsframework.core.metamodel.fields.Field;
+import org.globsframework.core.utils.Utils;
+import org.globsframework.shared.mem.*;
+import org.globsframework.shared.mem.impl.DefaultOffHeapService;
+import org.globsframework.shared.mem.impl.StringAccessorByAddress;
+import org.globsframework.shared.mem.impl.IndexTypeBuilder;
+import org.globsframework.shared.mem.impl.field.DataAccess;
+
+import java.io.IOException;
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
+import java.lang.invoke.VarHandle;
+import java.nio.channels.FileChannel;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+
+public class DefaultReadOffHeapManyIndex implements ReadOffHeapMultiIndex, ReadIndex {
+    public static final VarHandle LONG_VAR_HANDLE = ValueLayout.JAVA_LONG.varHandle();
+    private final OffHeapNotUniqueIndex offHeapIndex;
+    private final StringAccessorByAddress stringAccessor;
+    private final FileChannel indexChannel;
+    private final FileChannel indexDataRefChannel;
+    private final MemorySegment memorySegment;
+    private final MemorySegment dataRefMemorySegment;
+    private final IndexTypeBuilder indexTypeBuilder;
+
+    public DefaultReadOffHeapManyIndex(Path path, OffHeapNotUniqueIndex offHeapIndex, StringAccessorByAddress stringAccessor) throws IOException {
+        this.offHeapIndex = offHeapIndex;
+        this.stringAccessor = stringAccessor;
+        final String indexName = offHeapIndex.getName();
+        indexTypeBuilder = new IndexTypeBuilder(indexName, offHeapIndex.getKeyBuilder().getFields());
+        this.indexChannel = FileChannel.open(path.resolve(DefaultOffHeapService.getIndexNameFile(indexName)), StandardOpenOption.READ);
+        this.indexDataRefChannel = FileChannel.open(path.resolve(DefaultOffHeapService.getIndexDataNameFile(indexName)), StandardOpenOption.READ);
+        memorySegment = indexChannel.map(FileChannel.MapMode.READ_ONLY, 0, indexChannel.size(), Arena.ofShared());
+        dataRefMemorySegment = indexDataRefChannel.map(FileChannel.MapMode.READ_ONLY, 0, indexDataRefChannel.size(), Arena.ofShared());
+    }
+
+    public OffHeapRefs find(FunctionalKey functionalKey) {
+        return binSearch(functionalKey, 0);
+    }
+
+    private OffHeapRefs binSearch(FunctionalKey functionalKey, long indexOffset) {
+        int compare = compare(functionalKey, indexOffset);
+        if (compare == 0) {
+            int len = (int) indexTypeBuilder.dataLenOffsetArrayHandle.get(memorySegment, 0L, indexOffset);
+            final long dataOffset = (long)indexTypeBuilder.dataOffsetArrayHandle.get(memorySegment, 0L, indexOffset);
+            if (len == 1) {
+                return new OffHeapRefs(new long[]{dataOffset});
+            }
+            else {
+                return new OffHeapRefs(getDataOffset(dataOffset, len));
+            }
+        }
+        if (compare < 0) {
+            int index = (int) indexTypeBuilder.indexOffset1ArrayHandle.get(memorySegment, 0L, indexOffset);
+            if (index >= 0) {
+                return binSearch(functionalKey, index);
+            } else {
+                return null;
+            }
+        } else {
+            int index = (int) indexTypeBuilder.indexOffset2ArrayHandle.get(memorySegment, 0L, indexOffset);
+            if (index >= 0) {
+                return binSearch(functionalKey, index);
+            } else {
+                return null;
+            }
+        }
+    }
+
+    private long[] getDataOffset(long dataOffset, int size) {
+        long[] offsets = new long[size];
+        for (int i = 0; i < size; i++) {
+            offsets[i] = (long)LONG_VAR_HANDLE.get(dataRefMemorySegment, dataOffset + i * 8L);
+        }
+        return offsets;
+    }
+
+    private int compare(FunctionalKey functionalKey, long index) {
+        Field[] fields = indexTypeBuilder.keyFields;
+        DataAccess[] handleAccesses = indexTypeBuilder.dataAccesses;
+        for (int i = 0; i < handleAccesses.length; i++) {
+            DataAccess handleAccess = handleAccesses[i];
+            final Comparable value = (Comparable) functionalKey.getValue(fields[i]);
+            final Object o1 = handleAccess.get(memorySegment, index, stringAccessor);
+            final int cmp = Utils.compare(value, o1);
+            if (cmp != 0) {
+                return cmp;
+            }
+        }
+        return 0;
+    }
+
+    public boolean isUnique() {
+        return false;
+    }
+}

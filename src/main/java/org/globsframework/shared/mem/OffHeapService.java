@@ -2,6 +2,7 @@ package org.globsframework.shared.mem;
 
 import org.globsframework.core.functional.FunctionalKeyBuilder;
 import org.globsframework.core.metamodel.GlobType;
+import org.globsframework.shared.mem.impl.DefaultOffHeapService;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;
@@ -12,7 +13,9 @@ public interface OffHeapService {
         return new DefaultOffHeapService(type);
     }
 
-    OffHeapIndex declareIndex(String name, FunctionalKeyBuilder functionalKeyBuilder);
+    OffHeapUniqueIndex declareUniqueIndex(String name, FunctionalKeyBuilder functionalKeyBuilder);
+
+    OffHeapNotUniqueIndex declareNotUniqueIndex(String name, FunctionalKeyBuilder functionalKeyBuilder);
 
     OffHeapWriteService createWrite(Path file, Arena arena) throws IOException;
 

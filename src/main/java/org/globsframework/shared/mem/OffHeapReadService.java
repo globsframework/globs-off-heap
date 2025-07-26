@@ -3,13 +3,35 @@ package org.globsframework.shared.mem;
 import org.globsframework.core.model.Glob;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
 
 public interface OffHeapReadService {
-    ReadOffHeapIndex getIndex(OffHeapIndex index);
+    ReadOffHeapUniqueIndex getIndex(OffHeapUniqueIndex index);
 
-    void readAll(Consumer<Glob> consumer) throws IOException;
+    ReadOffHeapMultiIndex getIndex(OffHeapNotUniqueIndex index);
+
+    void readAll(DataConsumer consumer) throws IOException;
 
     Optional<Glob> read(OffHeapRef offHeapRef);
+
+    void read(OffHeapRefs offHeapRef, DataConsumer consumer);
+
+    interface DataConsumer {
+        void accept(Glob glob);
+    }
+
+    default Collection<Glob> read(OffHeapRefs offHeapRef){
+        List<Glob> globs = new ArrayList<Glob>(offHeapRef.offset().length);
+        read(offHeapRef, new DataConsumer() {
+            @Override
+            public void accept(Glob glob) {
+                globs.add(glob);
+            }
+        });
+        return globs;
+    }
 }

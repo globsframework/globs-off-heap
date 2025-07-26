@@ -17,8 +17,10 @@ import java.lang.foreign.Arena;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class TestShared {
     public static final int SIZE = 12_000;
@@ -35,17 +37,21 @@ public class TestShared {
                     .set(DummyObject1.maxValue, 10 + i % 100));
         }
 
-
-        final FunctionalKeyBuilderFactory functionalKeyBuilderFactory = FunctionalKeyBuilderFactory.create(DummyObject1.TYPE);
-        final FunctionalKeyBuilder functionalKeyBuilder =
-                functionalKeyBuilderFactory
-//                        .add(DummyObject1.val2)
+        final FunctionalKeyBuilder uniqueFunctionalKeyBuilder =
+                FunctionalKeyBuilderFactory.create(DummyObject1.TYPE)
                         .add(DummyObject1.val1)
+                        .add(DummyObject1.val2)
+                        .create();
+
+        final FunctionalKeyBuilder multiFunctionalKeyBuilder =
+                FunctionalKeyBuilderFactory.create(DummyObject1.TYPE)
+                        .add(DummyObject1.val2)
                         .create();
 
 
         OffHeapService offHeapService = OffHeapService.create(DummyObject1.TYPE);
-        OffHeapIndex offHeapIndex = offHeapService.declareIndex("index1", functionalKeyBuilder);
+        OffHeapUniqueIndex offHeapUniqueIndex = offHeapService.declareUniqueIndex("uniqueIndex", uniqueFunctionalKeyBuilder);
+        OffHeapNotUniqueIndex offHeapMultiIndex = offHeapService.declareNotUniqueIndex("multiIndex", multiFunctionalKeyBuilder);
 
 
         Arena arena = Arena.ofShared();
@@ -62,7 +68,6 @@ public class TestShared {
 
         offHeapWriteService.close();
 
-
         OffHeapReadService readHeapService = offHeapService.createRead(
                 Path.of("/tmp/test"), arena);
 
@@ -76,21 +81,42 @@ public class TestShared {
         Assert.assertEquals(globs.size(), received.size());
 
 
-        long startIndex = System.currentTimeMillis();
-        for (int i = 0; i < SIZE; i++) {
-            final FunctionalKey functionalKey = functionalKeyBuilder.create()
-                    .set(DummyObject1.val1, i)
-//                    .set(DummyObject1.val2, (i % 10))
-                    .create();
-            ReadOffHeapIndex readOffHeapIndex = readHeapService.getIndex(offHeapIndex);
-            OffHeapRef offHeapRef = readOffHeapIndex.find(functionalKey);
-            Optional<Glob> data = readHeapService.read(offHeapRef);
-            Assert.assertTrue(data.isPresent());
-            Assert.assertEquals("at " + i, 10 + i % 100, data.get().get(DummyObject1.maxValue).intValue());
-            Assert.assertEquals( "a name " + (i % 10), data.get().get(DummyObject1.name));
+        {
+            long startIndex = System.currentTimeMillis();
+            for (int i = 0; i < SIZE; i++) {
+                final FunctionalKey functionalKey = uniqueFunctionalKeyBuilder.create()
+                        .set(DummyObject1.val1, i)
+                        .set(DummyObject1.val2, (i % 10))
+                        .create()
+                        ;
+                ReadOffHeapUniqueIndex readOffHeapIndex = readHeapService.getIndex(offHeapUniqueIndex);
+                OffHeapRef offHeapRef = readOffHeapIndex.find(functionalKey);
+                Optional<Glob> data = readHeapService.read(offHeapRef);
+                Assert.assertTrue(data.isPresent());
+                Assert.assertEquals("at " + i, 10 + i % 100, data.get().get(DummyObject1.maxValue).intValue());
+                Assert.assertEquals( "a name " + (i % 10), data.get().get(DummyObject1.name));
+            }
+            long endIndex = System.currentTimeMillis();
+            System.out.println("find by index " + (endIndex - startIndex) + " ms");
         }
-        long endIndex = System.currentTimeMillis();
-        System.out.println("find by index " + (endIndex - startIndex) + " ms");
+
+        {
+            long startIndex = System.currentTimeMillis();
+            for (int i = 0; i < SIZE; i++) {
+                final FunctionalKey functionalKey = uniqueFunctionalKeyBuilder.create()
+                        .set(DummyObject1.val1, i)
+                        .set(DummyObject1.val2, (i % 10))
+                        .create()
+                        ;
+                ReadOffHeapMultiIndex readOffHeapMultiIndex = readHeapService.getIndex(offHeapMultiIndex);
+                final OffHeapRefs offHeapRefs = readOffHeapMultiIndex.find(functionalKey);
+                AtomicInteger count = new AtomicInteger();
+                readHeapService.read(offHeapRefs, _ -> count.incrementAndGet());
+                Assert.assertEquals(SIZE/10, count.get());
+            }
+            long endIndex = System.currentTimeMillis();
+            System.out.println("find by index " + (endIndex - startIndex) + " ms");
+        }
     }
 
 

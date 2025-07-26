@@ -1,7 +1,7 @@
-package org.globsframework.shared.mem;
+package org.globsframework.shared.mem.impl.write;
 
 public class Utils {
-    static Node1Elements split1Element(int from, int to) {
+    public static Node1Elements split1Element(int from, int to) {
         int len = to - from + 1; // from and to inclue
         if (len <= 0) {
             return null;
@@ -19,7 +19,7 @@ public class Utils {
         return node;
     }
 
-    static Node3Elements split3Element(int from, int to) {
+    public static Node3Elements split3Element(int from, int to) {
         int len = to - from + 1; // from and to inclue
         if (len <= 0) {
             return null;

@@ -1,7 +1,7 @@
-package org.globsframework.shared.mem;
+package org.globsframework.shared.mem.impl.write;
 
 class Node3Elements {
-    public int order;
+    int order;
     int indice1 = -1;
     int indice2 = -1;
     int indice3 = -1;

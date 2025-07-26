@@ -1,4 +1,4 @@
 package org.globsframework.shared.mem;
 
-public interface OffHeapRef {
+public record OffHeapRef(long index) {
 }

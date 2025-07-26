@@ -1,4 +1,4 @@
-package org.globsframework.shared.mem;
+package org.globsframework.shared.mem.impl.write;
 
 import junit.framework.TestCase;
 import org.junit.Assert;
