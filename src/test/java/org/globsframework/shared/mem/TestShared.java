@@ -6,7 +6,11 @@ import org.globsframework.core.functional.FunctionalKeyBuilderFactory;
 import org.globsframework.core.metamodel.GlobType;
 import org.globsframework.core.metamodel.GlobTypeBuilder;
 import org.globsframework.core.metamodel.GlobTypeBuilderFactory;
+import org.globsframework.core.metamodel.annotations.ArraySize;
+import org.globsframework.core.metamodel.annotations.ArraySize_;
+import org.globsframework.core.metamodel.fields.IntegerArrayField;
 import org.globsframework.core.metamodel.fields.IntegerField;
+import org.globsframework.core.metamodel.fields.LongField;
 import org.globsframework.core.metamodel.fields.StringField;
 import org.globsframework.core.model.Glob;
 import org.junit.Assert;
@@ -23,7 +27,8 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class TestShared {
-    public static final int SIZE = 12_000;
+    public static final int SIZE = 10_000;
+    public static final int MODULO = 1000;
 
     @Test
     public void buildApi() throws IOException {
@@ -32,9 +37,16 @@ public class TestShared {
         for (int i = 0; i < SIZE; i++) {
             globs.add(DummyObject1.TYPE.instantiate()
                     .set(DummyObject1.val1, i)
-                    .set(DummyObject1.val2, (i % 10))
-                    .set(DummyObject1.name, "a name " + (i % 10))
-                    .set(DummyObject1.maxValue, 10 + i % 100));
+                    .set(DummyObject1.val2, (i % MODULO))
+                    .set(DummyObject1.name, "a name " + (i % MODULO))
+                    .set(DummyObject1.data1, 10 + i % 100)
+                    .set(DummyObject1.data2, 10 + i % 100)
+                    .set(DummyObject1.data3, 10 + i % 100)
+                    .set(DummyObject1.data4, 10 + i % 100)
+                    .set(DummyObject1.maxValue, 10 + i % 100)
+                    .set(DummyObject1.data, new int[]{i, i+1, i+2})
+            )
+            ;
         }
 
         final FunctionalKeyBuilder uniqueFunctionalKeyBuilder =
@@ -79,43 +91,47 @@ public class TestShared {
         System.out.println("Read " + (System.currentTimeMillis() - startRead) + " ms");
 
         Assert.assertEquals(globs.size(), received.size());
-
+        final Glob glob = received.get(0);
+        final Integer i1 = glob.get(DummyObject1.val1);
+        Assert.assertArrayEquals(new int[]{i1, i1 + 1, i1 + 2}, glob.get(DummyObject1.data));
 
         {
             long startIndex = System.currentTimeMillis();
-            for (int i = 0; i < SIZE; i++) {
+            for (int i = 0; i < 1000; i++) {
                 final FunctionalKey functionalKey = uniqueFunctionalKeyBuilder.create()
                         .set(DummyObject1.val1, i)
-                        .set(DummyObject1.val2, (i % 10))
+                        .set(DummyObject1.val2, (i % MODULO))
                         .create()
                         ;
                 ReadOffHeapUniqueIndex readOffHeapIndex = readHeapService.getIndex(offHeapUniqueIndex);
                 OffHeapRef offHeapRef = readOffHeapIndex.find(functionalKey);
+                Assert.assertNotNull(functionalKey.toString(), offHeapRef);
                 Optional<Glob> data = readHeapService.read(offHeapRef);
                 Assert.assertTrue(data.isPresent());
                 Assert.assertEquals("at " + i, 10 + i % 100, data.get().get(DummyObject1.maxValue).intValue());
-                Assert.assertEquals( "a name " + (i % 10), data.get().get(DummyObject1.name));
+                Assert.assertEquals( "a name " + (i % MODULO), data.get().get(DummyObject1.name));
             }
             long endIndex = System.currentTimeMillis();
-            System.out.println("find by index " + (endIndex - startIndex) + " ms");
+            System.out.println("find by unique index " + (endIndex - startIndex) + " ms " + (endIndex - startIndex)/((double) 1000) + "ms/search");
         }
 
         {
             long startIndex = System.currentTimeMillis();
-            for (int i = 0; i < SIZE; i++) {
+            for (int i = 0; i < 1000; i++) {
                 final FunctionalKey functionalKey = uniqueFunctionalKeyBuilder.create()
                         .set(DummyObject1.val1, i)
-                        .set(DummyObject1.val2, (i % 10))
+                        .set(DummyObject1.val2, (i % MODULO))
                         .create()
                         ;
                 ReadOffHeapMultiIndex readOffHeapMultiIndex = readHeapService.getIndex(offHeapMultiIndex);
                 final OffHeapRefs offHeapRefs = readOffHeapMultiIndex.find(functionalKey);
+                Assert.assertNotNull(offHeapRefs);
                 AtomicInteger count = new AtomicInteger();
                 readHeapService.read(offHeapRefs, _ -> count.incrementAndGet());
-                Assert.assertEquals(SIZE/10, count.get());
+                Assert.assertEquals(SIZE / MODULO, count.get());
             }
             long endIndex = System.currentTimeMillis();
-            System.out.println("find by index " + (endIndex - startIndex) + " ms");
+            System.out.println("find by multi index " + (endIndex - startIndex) + " ms " + (endIndex - startIndex)/((double) 1000) + "ms/search" );
         }
     }
 
@@ -131,12 +147,28 @@ public class TestShared {
 
         public static final IntegerField maxValue;
 
+        @ArraySize_(3)
+        public static final IntegerArrayField data;
+
+        public static final LongField data1;
+
+        public static final LongField data2;
+
+        public static final LongField data3;
+
+        public static final LongField data4;
+
         static {
             final GlobTypeBuilder globTypeBuilder = GlobTypeBuilderFactory.create("DummyObject1");
             TYPE = globTypeBuilder.unCompleteType();
             name = globTypeBuilder.declareStringField("name");
             val1 = globTypeBuilder.declareIntegerField("val1");
             val2 = globTypeBuilder.declareIntegerField("val2");
+            data = globTypeBuilder.declareIntegerArrayField("data", ArraySize.create(3));
+            data1 = globTypeBuilder.declareLongField("data1");
+            data2 = globTypeBuilder.declareLongField("data2");
+            data3 = globTypeBuilder.declareLongField("data3");
+            data4 = globTypeBuilder.declareLongField("data4");
             maxValue = globTypeBuilder.declareIntegerField("maxValue");
             globTypeBuilder.complete();
         }

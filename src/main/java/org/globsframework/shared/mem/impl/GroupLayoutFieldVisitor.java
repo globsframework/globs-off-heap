@@ -1,12 +1,13 @@
 package org.globsframework.shared.mem.impl;
 
+import org.globsframework.core.metamodel.annotations.ArraySize;
 import org.globsframework.core.metamodel.fields.*;
 
 import java.lang.foreign.*;
 import java.util.ArrayList;
 import java.util.List;
 
-class GroupLayoutAbstractFieldVisitor extends FieldVisitor.AbstractFieldVisitor {
+class GroupLayoutFieldVisitor extends FieldVisitor.AbstractWithErrorVisitor {
     List<MemoryLayout> fieldsLayout = new ArrayList<>();
     int minAlignment = 0;
     int currentPos = 0;
@@ -43,6 +44,20 @@ class GroupLayoutAbstractFieldVisitor extends FieldVisitor.AbstractFieldVisitor 
         addPadding(8);
         fieldsLayout.add(ValueLayout.JAVA_DOUBLE.withName(field.getName()));
         currentPos += 8;
+    }
+
+    public void visitBoolean(BooleanField field) {
+        addPadding(1);
+        fieldsLayout.add(ValueLayout.JAVA_BOOLEAN.withName(field.getName()));
+        currentPos += 8;
+    }
+
+    public void visitIntegerArray(IntegerArrayField field) throws Exception {
+        addPadding(4);
+        int size = field.getAnnotation(ArraySize.KEY).getNotNull(ArraySize.VALUE);
+        fieldsLayout.add(ValueLayout.JAVA_INT.withName(field.getName() + DefaultOffHeapService.SUFFIX_LEN));
+        fieldsLayout.add(MemoryLayout.sequenceLayout(size, ValueLayout.JAVA_INT).withName(field.getName()));
+        currentPos += 4 + size * 4;
     }
 
     public GroupLayout createGroupLayout() {

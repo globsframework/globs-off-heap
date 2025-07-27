@@ -2,9 +2,11 @@ package org.globsframework.shared.mem.impl;
 
 import org.globsframework.core.metamodel.GlobType;
 import org.globsframework.core.metamodel.fields.Field;
+import org.globsframework.core.metamodel.fields.IntegerArrayField;
 import org.globsframework.core.metamodel.fields.StringField;
 import org.globsframework.shared.mem.impl.field.AnyFieldHandleAccess;
 import org.globsframework.shared.mem.impl.field.HandleAccess;
+import org.globsframework.shared.mem.impl.field.IntArrayFieldHandleAccess;
 import org.globsframework.shared.mem.impl.field.StringFieldHandleAccess;
 
 import java.lang.foreign.GroupLayout;
@@ -19,7 +21,7 @@ public class OffHeapTypeInfo {
     public OffHeapTypeInfo(GlobType type) {
         this.type = type;
         fields = type.getFields();
-        final var groupLayoutAbstractFieldVisitor = new GroupLayoutAbstractFieldVisitor();
+        final var groupLayoutAbstractFieldVisitor = new GroupLayoutFieldVisitor();
         for (Field field : fields) {
             field.safeAccept(groupLayoutAbstractFieldVisitor);
         }
@@ -29,6 +31,8 @@ public class OffHeapTypeInfo {
             Field field = fields[i];
             if (field instanceof StringField) {
                 handleAccesses[i] = StringFieldHandleAccess.create(groupLayout, (StringField) field);
+            } else if (field instanceof IntegerArrayField) {
+                handleAccesses[i] = IntArrayFieldHandleAccess.create(groupLayout, (IntegerArrayField) field);
             } else {
                 handleAccesses[i] = AnyFieldHandleAccess.create(groupLayout, field);
             }
