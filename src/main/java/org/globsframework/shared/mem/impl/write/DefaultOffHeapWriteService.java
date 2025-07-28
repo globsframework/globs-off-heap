@@ -13,7 +13,7 @@ import org.globsframework.shared.mem.impl.DefaultOffHeapService;
 import org.globsframework.shared.mem.impl.Index;
 import org.globsframework.shared.mem.impl.OffHeapTypeInfo;
 import org.globsframework.shared.mem.impl.IndexTypeBuilder;
-import org.globsframework.shared.mem.impl.field.HandleAccess;
+import org.globsframework.shared.mem.impl.field.handleacces.HandleAccess;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

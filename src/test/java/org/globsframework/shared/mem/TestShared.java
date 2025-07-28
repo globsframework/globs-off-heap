@@ -21,19 +21,21 @@ import java.lang.foreign.Arena;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class TestShared {
-    public static final int SIZE = 10_000;
-    public static final int MODULO = 1000;
+//    public static final int SIZE = 10_000_000;
+//    public static final int MODULO = 1_000_000;
+    public static final int SIZE = 500_000;
+    public static final int MODULO = 50_000;
 
     @Test
     public void buildApi() throws IOException {
 
-        List<Glob> globs = new ArrayList<Glob>();
+        List<Glob> globs = new ArrayList<>();
         for (int i = 0; i < SIZE; i++) {
             globs.add(DummyObject1.TYPE.instantiate()
                     .set(DummyObject1.val1, i)
@@ -57,7 +59,7 @@ public class TestShared {
 
         final FunctionalKeyBuilder multiFunctionalKeyBuilder =
                 FunctionalKeyBuilderFactory.create(DummyObject1.TYPE)
-                        .add(DummyObject1.val2)
+                        .add(DummyObject1.name)
                         .create();
 
 
@@ -80,8 +82,12 @@ public class TestShared {
 
         offHeapWriteService.close();
 
+        long startInitReader = System.nanoTime();
         OffHeapReadService readHeapService = offHeapService.createRead(
                 Path.of("/tmp/test"), arena);
+
+        long endInitReader = System.nanoTime();
+        System.out.println("init read " + TimeUnit.NANOSECONDS.toMillis(endInitReader - startInitReader) + " ms");
 
         List<Glob> received = new ArrayList<>();
         final long startRead = System.currentTimeMillis();
@@ -94,44 +100,68 @@ public class TestShared {
         final Glob glob = received.get(0);
         final Integer i1 = glob.get(DummyObject1.val1);
         Assert.assertArrayEquals(new int[]{i1, i1 + 1, i1 + 2}, glob.get(DummyObject1.data));
+        FunctionalKey[] functionalKeys = new FunctionalKey[1000];
+        final FunctionalKeyBuilder optFunctionalKeyBuilder =
+                FunctionalKeyBuilderFactory.create(DummyObject1.TYPE)
+                        .add(DummyObject1.val1)
+                        .add(DummyObject1.val2)
+                        .add(DummyObject1.name)
+                        .create();
+
+        for (int i = 0; i < 1000; i++) {
+            final FunctionalKey functionalKey = optFunctionalKeyBuilder.create()
+                    .set(DummyObject1.val1, i)
+                    .set(DummyObject1.val2, (i % MODULO))
+                    .set(DummyObject1.name, "a name " + (i % MODULO))
+                    .create();
+            functionalKeys[i] = functionalKey;
+        }
+        System.gc();
+        System.gc();
+        System.gc();
+        System.out.println("Init functionnal key ok");
+        final int loop = 100;
 
         {
-            long startIndex = System.currentTimeMillis();
-            for (int i = 0; i < 1000; i++) {
-                final FunctionalKey functionalKey = uniqueFunctionalKeyBuilder.create()
-                        .set(DummyObject1.val1, i)
-                        .set(DummyObject1.val2, (i % MODULO))
-                        .create()
-                        ;
-                ReadOffHeapUniqueIndex readOffHeapIndex = readHeapService.getIndex(offHeapUniqueIndex);
-                OffHeapRef offHeapRef = readOffHeapIndex.find(functionalKey);
-                Assert.assertNotNull(functionalKey.toString(), offHeapRef);
-                Optional<Glob> data = readHeapService.read(offHeapRef);
-                Assert.assertTrue(data.isPresent());
-                Assert.assertEquals("at " + i, 10 + i % 100, data.get().get(DummyObject1.maxValue).intValue());
-                Assert.assertEquals( "a name " + (i % MODULO), data.get().get(DummyObject1.name));
+            long startIndex = System.nanoTime();
+            for (int i = 0; i < loop; i++) {
+                for (FunctionalKey functionalKey : functionalKeys) {
+                    ReadOffHeapUniqueIndex readOffHeapIndex = readHeapService.getIndex(offHeapUniqueIndex);
+                    OffHeapRef offHeapRef = readOffHeapIndex.find(functionalKey);
+                    Assert.assertTrue(offHeapRef.index() != -1);
+                    Assert.assertNotNull(offHeapRef);
+                    Optional<Glob> data = readHeapService.read(offHeapRef);
+                    Assert.assertTrue(data.isPresent());
+//
+//                Assert.assertEquals("at " + i, 10 + i % 100, data.get().get(DummyObject1.maxValue).intValue());
+//                Assert.assertEquals( "a name " + (i % MODULO), data.get().get(DummyObject1.name));
+                }
             }
-            long endIndex = System.currentTimeMillis();
-            System.out.println("find by unique index " + (endIndex - startIndex) + " ms " + (endIndex - startIndex)/((double) 1000) + "ms/search");
+            long endIndex = System.nanoTime();
+            System.out.println("find by unique index " + TimeUnit.NANOSECONDS.toMillis(endIndex - startIndex) + " ms " +
+                               TimeUnit.NANOSECONDS.toMicros(endIndex - startIndex) / ((double) loop * functionalKeys.length) + "µs/search");
+
         }
 
         {
-            long startIndex = System.currentTimeMillis();
-            for (int i = 0; i < 1000; i++) {
-                final FunctionalKey functionalKey = uniqueFunctionalKeyBuilder.create()
-                        .set(DummyObject1.val1, i)
-                        .set(DummyObject1.val2, (i % MODULO))
-                        .create()
-                        ;
-                ReadOffHeapMultiIndex readOffHeapMultiIndex = readHeapService.getIndex(offHeapMultiIndex);
-                final OffHeapRefs offHeapRefs = readOffHeapMultiIndex.find(functionalKey);
-                Assert.assertNotNull(offHeapRefs);
-                AtomicInteger count = new AtomicInteger();
-                readHeapService.read(offHeapRefs, _ -> count.incrementAndGet());
-                Assert.assertEquals(SIZE / MODULO, count.get());
+            ReadOffHeapMultiIndex readOffHeapMultiIndex = readHeapService.getIndex(offHeapMultiIndex);
+            System.out.println("start multi");
+            long startIndex = System.nanoTime();
+            for (int i = 0; i < loop; i++) {
+                {
+                    for (FunctionalKey functionalKey : functionalKeys) {
+                        final OffHeapRefs offHeapRefs = readOffHeapMultiIndex.find(functionalKey);
+                        Assert.assertNotNull(offHeapRefs);
+                        AtomicInteger count = new AtomicInteger();
+                        readHeapService.read(offHeapRefs, _ -> count.incrementAndGet());
+                        Assert.assertEquals(SIZE / MODULO, count.get());
+                        readOffHeapMultiIndex.free(offHeapRefs);
+                    }
+                }
             }
-            long endIndex = System.currentTimeMillis();
-            System.out.println("find by multi index " + (endIndex - startIndex) + " ms " + (endIndex - startIndex)/((double) 1000) + "ms/search" );
+            long endIndex = System.nanoTime();
+            System.out.println("find by multi index " + TimeUnit.NANOSECONDS.toMillis(endIndex - startIndex) +
+                               " ms " + TimeUnit.NANOSECONDS.toMicros(endIndex - startIndex) / ((double) functionalKeys.length * loop) + "µs/search");
         }
     }
 

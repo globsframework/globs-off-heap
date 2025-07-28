@@ -1,4 +1,4 @@
-package org.globsframework.shared.mem.impl.field;
+package org.globsframework.shared.mem.impl.field.handleacces;
 
 import org.globsframework.core.metamodel.annotations.ArraySize;
 import org.globsframework.core.metamodel.fields.IntegerArrayField;

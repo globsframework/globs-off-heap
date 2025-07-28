@@ -5,7 +5,7 @@ import org.globsframework.core.model.MutableGlob;
 import org.globsframework.core.utils.collections.IntHashMap;
 import org.globsframework.shared.mem.*;
 import org.globsframework.shared.mem.impl.*;
-import org.globsframework.shared.mem.impl.field.HandleAccess;
+import org.globsframework.shared.mem.impl.field.handleacces.HandleAccess;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;
@@ -65,8 +65,10 @@ public class DefaultOffHeapReadService implements OffHeapReadService, StringAcce
     public void read(OffHeapRefs offHeapRef, DataConsumer consumer) {
         final CurrentOffset currentOffset = new CurrentOffset(0);
         ReadContext readContext = new ReadContext(this::get, currentOffset);
-        for (long offset : offHeapRef.offset()) {
-            readContext.currentOffset().offset = offset;
+        final long[] offset = offHeapRef.offset().getOffset();
+        final int size = offHeapRef.offset().size();
+        for (int i = 0; i < size; i++) {
+            readContext.currentOffset().offset = offset[i];
             consumer.accept(readGlob(memorySegment, readContext));
         }
     }
@@ -104,16 +106,16 @@ public class DefaultOffHeapReadService implements OffHeapReadService, StringAcce
 
     @Override
     synchronized public String get(int addr, int len) {
-        final String s = readStrings.get(addr);
+        String s = readStrings.get(addr);
         if (s == null) {
             if (cache.length < len) {
                 cache = new byte[len];
             }
             stringBytesBuffer.position(addr);
             stringBytesBuffer.get(cache, 0, len);
-            readStrings.put(addr, new String(cache, 0, len, StandardCharsets.UTF_8));
+            s = new String(cache, 0, len, StandardCharsets.UTF_8);
+            readStrings.put(addr, s);
         }
         return s;
     }
-
 }

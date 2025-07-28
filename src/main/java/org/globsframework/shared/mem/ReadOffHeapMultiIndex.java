@@ -4,4 +4,6 @@ import org.globsframework.core.functional.FunctionalKey;
 
 public interface ReadOffHeapMultiIndex {
     OffHeapRefs find(FunctionalKey offHeapIndex);
+
+    void free(OffHeapRefs offHeapRefs);
 }

@@ -7,7 +7,7 @@ import org.globsframework.shared.mem.*;
 import org.globsframework.shared.mem.impl.DefaultOffHeapService;
 import org.globsframework.shared.mem.impl.StringAccessorByAddress;
 import org.globsframework.shared.mem.impl.IndexTypeBuilder;
-import org.globsframework.shared.mem.impl.field.DataAccess;
+import org.globsframework.shared.mem.impl.field.dataaccess.DataAccess;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;
@@ -59,13 +59,15 @@ public class DefaultReadOffHeapUniqueIndex implements ReadOffHeapUniqueIndex, Re
     }
 
     private int compare(FunctionalKey functionalKey, long index) {
-        Field[] fields = indexTypeBuilder.keyFields;
+//        Field[] fields = indexTypeBuilder.keyFields;
         DataAccess[] handleAccesses = indexTypeBuilder.dataAccesses;
         for (int i = 0; i < handleAccesses.length; i++) {
             DataAccess handleAccess = handleAccesses[i];
-            final Comparable value = (Comparable) functionalKey.getValue(fields[i]);
-            final Object o1 = handleAccess.get(memorySegment, index, stringAccessor);
-            final int cmp = Utils.compare(value, o1);
+            int cmp = handleAccess.compare(functionalKey, memorySegment, index, stringAccessor);
+
+//            final Comparable value = (Comparable) functionalKey.getValue(fields[i]);
+//            final Object o1 = handleAccess.get(memorySegment, index, stringAccessor);
+//            final int cmp = Utils.compare(value, o1);
             if (cmp != 0) {
                 return cmp;
             }

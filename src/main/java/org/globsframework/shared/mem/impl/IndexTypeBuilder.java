@@ -9,9 +9,10 @@ import org.globsframework.core.metamodel.fields.LongField;
 import org.globsframework.core.metamodel.fields.StringField;
 import org.globsframework.core.model.globaccessor.set.GlobSetIntAccessor;
 import org.globsframework.core.model.globaccessor.set.GlobSetLongAccessor;
-import org.globsframework.shared.mem.impl.field.AnyDataAccess;
-import org.globsframework.shared.mem.impl.field.DataAccess;
-import org.globsframework.shared.mem.impl.field.StringDataAccess;
+import org.globsframework.shared.mem.impl.field.dataaccess.AnyDataAccess;
+import org.globsframework.shared.mem.impl.field.dataaccess.DataAccess;
+import org.globsframework.shared.mem.impl.field.dataaccess.IntDataAccess;
+import org.globsframework.shared.mem.impl.field.dataaccess.StringDataAccess;
 
 import java.lang.foreign.GroupLayout;
 import java.lang.foreign.MemoryLayout;
@@ -72,6 +73,8 @@ public class IndexTypeBuilder {
             Field keyField = keyFields[i];
             if (keyField instanceof StringField stringField) {
                 dataAccesses[i] = StringDataAccess.create(groupLayout, stringField);
+            } else if (keyField instanceof IntegerField  integerField){
+                dataAccesses[i] = IntDataAccess.create(groupLayout, integerField);
             } else {
                 dataAccesses[i] = AnyDataAccess.create(groupLayout, keyField);
             }

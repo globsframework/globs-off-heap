@@ -25,7 +25,7 @@ public interface OffHeapReadService {
     }
 
     default Collection<Glob> read(OffHeapRefs offHeapRef){
-        List<Glob> globs = new ArrayList<Glob>(offHeapRef.offset().length);
+        List<Glob> globs = new ArrayList<>(offHeapRef.offset().size());
         read(offHeapRef, new DataConsumer() {
             @Override
             public void accept(Glob glob) {

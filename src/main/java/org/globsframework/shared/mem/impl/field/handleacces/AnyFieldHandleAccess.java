@@ -1,4 +1,4 @@
-package org.globsframework.shared.mem.impl.field;
+package org.globsframework.shared.mem.impl.field.handleacces;
 
 import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.model.Glob;
@@ -26,7 +26,10 @@ public class AnyFieldHandleAccess implements HandleAccess {
 
     @Override
     public void save(Glob data, MemorySegment memorySegment, long offset, SaveContext saveContext) {
-        varHandle.set(memorySegment, offset, data.getValue(field));
+        final Object value = data.getValue(field);
+        if (value != null) {
+            varHandle.set(memorySegment, offset, value);
+        }
     }
 
     @Override

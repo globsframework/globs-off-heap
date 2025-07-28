@@ -17,19 +17,19 @@ public class IndexFunctionalKeyComparator implements Comparator<FunctionalKey> {
         comparators = new Comparator[sortFields.length];
         for (int i = 0; i < sortFields.length; i++) {
             Field sortField = sortFields[i];
-            if (sortField instanceof StringField stringField) {
-                comparators[i] = (o1, o2) -> {
-                    final Glob glob1 = this.allStrings.get(o1.get(stringField));
-                    final Glob glob2 = this.allStrings.get(o2.get(stringField));
-                    final int i1 = glob1.getNotNull(StringRefType.offset);
-                    final int i2 = glob2.getNotNull(StringRefType.offset);
-                    return Integer.compare(i1, i2);
-                };
-            } else {
+//            if (sortField instanceof StringField stringField) {
+//                comparators[i] = (o1, o2) -> {
+//                    final Glob glob1 = this.allStrings.get(o1.get(stringField));
+//                    final Glob glob2 = this.allStrings.get(o2.get(stringField));
+//                    final int i1 = glob1.getNotNull(StringRefType.offset);
+//                    final int i2 = glob2.getNotNull(StringRefType.offset);
+//                    return Integer.compare(i1, i2);
+//                };
+//            } else {
                 comparators[i] = (o1, o2) ->
                         org.globsframework.core.utils.Utils.compare((Comparable) o1.getValue(sortField),
                                 (Comparable) o2.getValue(sortField));
-            }
+//            }
         }
     }
 
