@@ -1,6 +1,8 @@
 package org.globsframework.shared.mem.impl.field.handleacces;
 
 import org.globsframework.core.metamodel.fields.Field;
+import org.globsframework.core.metamodel.fields.IntegerField;
+import org.globsframework.core.metamodel.fields.LongField;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
 import org.globsframework.shared.mem.impl.read.ReadContext;
@@ -11,30 +13,33 @@ import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.invoke.VarHandle;
 
-public class AnyFieldHandleAccess implements HandleAccess {
+public class IntegerFieldHandleAccess implements HandleAccess {
     private final VarHandle varHandle;
-    private final Field field;
+    private final IntegerField field;
 
-    public AnyFieldHandleAccess(VarHandle varHandle, Field field) {
+    public IntegerFieldHandleAccess(VarHandle varHandle, IntegerField field) {
         this.varHandle = varHandle;
         this.field = field;
     }
 
-    public static HandleAccess create(GroupLayout groupLayout, Field field) {
-        return new AnyFieldHandleAccess(groupLayout.varHandle(MemoryLayout.PathElement.groupElement(field.getName())), field);
+    public static HandleAccess create(GroupLayout groupLayout, IntegerField field) {
+        return new IntegerFieldHandleAccess(groupLayout.varHandle(MemoryLayout.PathElement.groupElement(field.getName())), field);
+    }
+
+    @Override
+    public Field getField() {
+        return field;
     }
 
     @Override
     public void save(Glob data, MemorySegment memorySegment, long offset, SaveContext saveContext) {
-        final Object value = data.getValue(field);
-        if (value != null) {
-            varHandle.set(memorySegment, offset, value);
-        }
+        final int value = data.get(field, 0);
+        varHandle.set(memorySegment, offset, value);
     }
 
     @Override
     public void readAtOffset(MutableGlob data, MemorySegment memorySegment, long offset, ReadContext readContext) {
-        data.setValue(field, varHandle.get(memorySegment, offset));
+        data.set(field, (int)varHandle.get(memorySegment, offset));
     }
 
 }

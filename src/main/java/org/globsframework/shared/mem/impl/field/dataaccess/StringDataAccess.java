@@ -23,11 +23,11 @@ public class StringDataAccess implements DataAccess {
     }
 
     public static DataAccess create(GroupLayout groupLayout, StringField field) {
-        return new StringDataAccess(field, groupLayout.arrayElementVarHandle(MemoryLayout.PathElement.groupElement(field.getName() + DefaultOffHeapService.SUFFIX_ADDR)),
-                groupLayout.arrayElementVarHandle(MemoryLayout.PathElement.groupElement(field.getName() + DefaultOffHeapService.SUFFIX_LEN)));
+        return new StringDataAccess(field, groupLayout.arrayElementVarHandle(MemoryLayout.PathElement.groupElement(field.getName() + DefaultOffHeapService.STRING_SUFFIX_ADDR)),
+                groupLayout.arrayElementVarHandle(MemoryLayout.PathElement.groupElement(field.getName() + DefaultOffHeapService.STRING_SUFFIX_LEN)));
     }
 
-    public Object get(MemorySegment memorySegment, long offset, StringAccessorByAddress stringAccessorByAddress) {
+    public String get(MemorySegment memorySegment, long offset, StringAccessorByAddress stringAccessorByAddress) {
         int addr = (int) varAddrHandle.get(memorySegment, 0L, offset);
         int len = (int) varLenHandle.get(memorySegment, 0L, offset);
         return stringAccessorByAddress.get(addr, len);
@@ -35,6 +35,6 @@ public class StringDataAccess implements DataAccess {
 
     @Override
     public int compare(FieldValues functionalKey, MemorySegment memorySegment, long index, StringAccessorByAddress stringAccessorByAddress) {
-        return Utils.compare(functionalKey.get(field), (String)get(memorySegment, index, stringAccessorByAddress));
+        return Utils.compare(functionalKey.get(field), get(memorySegment, index, stringAccessorByAddress));
     }
 }

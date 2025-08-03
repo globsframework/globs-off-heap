@@ -1,5 +1,7 @@
 package org.globsframework.shared.mem.impl.read;
 
+import org.globsframework.core.metamodel.GlobType;
+import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
 import org.globsframework.core.utils.collections.IntHashMap;
@@ -63,33 +65,65 @@ public class DefaultOffHeapReadService implements OffHeapReadService, StringAcce
 
     @Override
     public void read(OffHeapRefs offHeapRef, DataConsumer consumer) {
-        final CurrentOffset currentOffset = new CurrentOffset(0);
-        ReadContext readContext = new ReadContext(this::get, currentOffset);
+        ReadContext readContext = new ReadContext(this::get);
         final long[] offset = offHeapRef.offset().getOffset();
         final int size = offHeapRef.offset().size();
+        final HandleAccess[] handleAccesses = offHeapTypeInfo.handleAccesses;
+        final GlobType type = offHeapTypeInfo.type;
         for (int i = 0; i < size; i++) {
-            readContext.currentOffset().offset = offset[i];
-            consumer.accept(readGlob(memorySegment, readContext));
+            consumer.accept(readGlob(memorySegment, offset[i], readContext, handleAccesses, type));
         }
     }
 
     @Override
     public void readAll(DataConsumer consumer) throws IOException {
-        final ReadContext readContext = new ReadContext(this::get, new CurrentOffset(0));
+        final ReadContext readContext = new ReadContext(this);
+        final long groupSize = offHeapTypeInfo.groupLayout.byteSize();
+        final GlobType type = offHeapTypeInfo.type;
+        long offset = 0;
+        final HandleAccess[] handleAccesses = offHeapTypeInfo.handleAccesses;
         while (true) {
-            if (readContext.offset() + offHeapTypeInfo.groupLayout.byteSize() > dataSize) {
+            if (offset + groupSize > dataSize) {
                 return;
             }
-            final MutableGlob instantiate = readGlob(memorySegment, readContext);
+            final MutableGlob instantiate = readGlob(memorySegment, offset, readContext, handleAccesses, type);
             consumer.accept(instantiate);
+            offset += groupSize;
         }
     }
 
-    private MutableGlob readGlob(MemorySegment memorySegment, ReadContext readContext) {
-        final MutableGlob instantiate = offHeapTypeInfo.type.instantiate();
-        final long offset = readContext.currentOffset().offset;
-        readContext.currentOffset().offset += offHeapTypeInfo.byteSizeWithPadding();
+    @Override
+    public void readAll(DataConsumer consumer, Set<Field> onlyFields) throws IOException {
+        final ReadContext readContext = new ReadContext(this);
+        final long groupSize = offHeapTypeInfo.groupLayout.byteSize();
+        final GlobType type = offHeapTypeInfo.type;
+        final HandleAccess[] accesses = getHandleAccesses(onlyFields);
+        long offset = 0;
+        while (true) {
+            if (offset + groupSize > dataSize) {
+                return;
+            }
+            final MutableGlob instantiate = readGlob(memorySegment, offset, readContext, accesses, type);
+            consumer.accept(instantiate);
+            offset += groupSize;
+        }
+    }
+
+    private HandleAccess[] getHandleAccesses(Set<Field> onlyFields) {
+        final HandleAccess[] accesses = new HandleAccess[onlyFields.size()];
+        int i = 0;
         for (HandleAccess handleAccess : offHeapTypeInfo.handleAccesses) {
+            if (onlyFields.contains(handleAccess.getField())) {
+                accesses[i] = handleAccess;
+                i++;
+            }
+        }
+        return accesses;
+    }
+
+    private MutableGlob readGlob(MemorySegment memorySegment, long offset, ReadContext readContext, HandleAccess[] handleAccesses, GlobType type) {
+        final MutableGlob instantiate = type.instantiate();
+        for (HandleAccess handleAccess : handleAccesses) {
             handleAccess.readAtOffset(instantiate, memorySegment, offset, readContext);
         }
         return instantiate;
@@ -97,10 +131,9 @@ public class DefaultOffHeapReadService implements OffHeapReadService, StringAcce
 
     @Override
     public Optional<Glob> read(OffHeapRef offHeapRef) {
-        ReadContext readContext = new ReadContext(this::get,
-                new CurrentOffset(offHeapRef.index()));
+        ReadContext readContext = new ReadContext(this);
         final MutableGlob instantiate =
-                readGlob(memorySegment, readContext);
+                readGlob(memorySegment, offHeapRef.index(), readContext, offHeapTypeInfo.handleAccesses, offHeapTypeInfo.type);
         return Optional.of(instantiate);
     }
 

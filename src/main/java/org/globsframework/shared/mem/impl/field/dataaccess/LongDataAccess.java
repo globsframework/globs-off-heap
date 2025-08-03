@@ -1,6 +1,7 @@
 package org.globsframework.shared.mem.impl.field.dataaccess;
 
 import org.globsframework.core.metamodel.fields.IntegerField;
+import org.globsframework.core.metamodel.fields.LongField;
 import org.globsframework.core.model.FieldValues;
 import org.globsframework.shared.mem.impl.StringAccessorByAddress;
 
@@ -9,23 +10,23 @@ import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.invoke.VarHandle;
 
-public class IntDataAccess implements DataAccess {
-    private final IntegerField field;
+public class LongDataAccess implements DataAccess {
+    private final LongField field;
     private final VarHandle varHandle;
 
-    public IntDataAccess(IntegerField field, VarHandle varHandle) {
+    public LongDataAccess(LongField field, VarHandle varHandle) {
         this.field = field;
         this.varHandle = varHandle;
     }
 
     @Override
     public int compare(FieldValues functionalKey, MemorySegment memorySegment, long index, StringAccessorByAddress stringAccessorByAddress) {
-        final int i = functionalKey.get(field, 0);
-        final int other = (int)varHandle.get(memorySegment, 0L, index);
-        return Integer.compare(i, other);
+        final long i = functionalKey.get(field, 0);
+        final long other = (long)varHandle.get(memorySegment, 0L, index);
+        return Long.compare(i, other);
     }
 
-    public static IntDataAccess create(GroupLayout groupLayout, IntegerField field) {
-        return new IntDataAccess(field, groupLayout.arrayElementVarHandle(MemoryLayout.PathElement.groupElement(field.getName())));
+    public static LongDataAccess create(GroupLayout groupLayout, LongField field) {
+        return new LongDataAccess(field, groupLayout.arrayElementVarHandle(MemoryLayout.PathElement.groupElement(field.getName())));
     }
 }

@@ -8,10 +8,7 @@ import org.globsframework.core.metamodel.GlobTypeBuilder;
 import org.globsframework.core.metamodel.GlobTypeBuilderFactory;
 import org.globsframework.core.metamodel.annotations.ArraySize;
 import org.globsframework.core.metamodel.annotations.ArraySize_;
-import org.globsframework.core.metamodel.fields.IntegerArrayField;
-import org.globsframework.core.metamodel.fields.IntegerField;
-import org.globsframework.core.metamodel.fields.LongField;
-import org.globsframework.core.metamodel.fields.StringField;
+import org.globsframework.core.metamodel.fields.*;
 import org.globsframework.core.model.Glob;
 import org.junit.Assert;
 import org.junit.Test;
@@ -20,9 +17,11 @@ import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -37,16 +36,19 @@ public class TestShared {
 
         List<Glob> globs = new ArrayList<>();
         for (int i = 0; i < SIZE; i++) {
+            final LocalDate localDate = LocalDate.of(1900 + (i % 200), i % 11 + 1, i % 28 + 1);
             globs.add(DummyObject1.TYPE.instantiate()
                     .set(DummyObject1.val1, i)
                     .set(DummyObject1.val2, (i % MODULO))
                     .set(DummyObject1.name, "a name " + (i % MODULO))
                     .set(DummyObject1.data1, 10 + i % 100)
                     .set(DummyObject1.data2, 10 + i % 100)
-                    .set(DummyObject1.data3, 10 + i % 100)
-                    .set(DummyObject1.data4, 10 + i % 100)
+                    .set(DummyObject1.data3, localDate)
+                    .set(DummyObject1.data4, ZonedDateTime.of(localDate, LocalTime.of(i % 24, i % 60, 1 % 60), ZoneId.systemDefault()))
                     .set(DummyObject1.maxValue, 10 + i % 100)
                     .set(DummyObject1.data, new int[]{i, i+1, i+2})
+                    .set(DummyObject1.data5, i % 2 == 0)
+                    .set(DummyObject1.data6, (long) i * i)
             )
             ;
         }
@@ -89,17 +91,13 @@ public class TestShared {
         long endInitReader = System.nanoTime();
         System.out.println("init read " + TimeUnit.NANOSECONDS.toMillis(endInitReader - startInitReader) + " ms");
 
-        List<Glob> received = new ArrayList<>();
-        final long startRead = System.currentTimeMillis();
-        readHeapService.readAll(glob -> {
-            received.add(glob);
-        });
-        System.out.println("Read " + (System.currentTimeMillis() - startRead) + " ms");
-
-        Assert.assertEquals(globs.size(), received.size());
-        final Glob glob = received.get(0);
-        final Integer i1 = glob.get(DummyObject1.val1);
-        Assert.assertArrayEquals(new int[]{i1, i1 + 1, i1 + 2}, glob.get(DummyObject1.data));
+        for (int i = 0; i < 20; i++) {
+            loopRead(readHeapService, globs);
+        }
+        System.out.println("read selected");
+        for (int i = 0; i < 20; i++) {
+            selectRead(readHeapService, globs);
+        }
         FunctionalKey[] functionalKeys = new FunctionalKey[1000];
         final FunctionalKeyBuilder optFunctionalKeyBuilder =
                 FunctionalKeyBuilderFactory.create(DummyObject1.TYPE)
@@ -122,47 +120,81 @@ public class TestShared {
         System.out.println("Init functionnal key ok");
         final int loop = 100;
 
-        {
-            long startIndex = System.nanoTime();
-            for (int i = 0; i < loop; i++) {
+        for (int i = 0; i < 10; i++) {
+            findByIndex(loop, functionalKeys, readHeapService, offHeapUniqueIndex);
+        }
+        for (int i = 0; i < 10; i++) {
+            getMultiIndex(readHeapService, offHeapMultiIndex, loop, functionalKeys);
+        }
+    }
+
+    private static void getMultiIndex(OffHeapReadService readHeapService, OffHeapNotUniqueIndex offHeapMultiIndex, int loop, FunctionalKey[] functionalKeys) {
+        ReadOffHeapMultiIndex readOffHeapMultiIndex = readHeapService.getIndex(offHeapMultiIndex);
+        System.out.println("start multi");
+        long startIndex = System.nanoTime();
+        for (int i = 0; i < loop; i++) {
+            {
                 for (FunctionalKey functionalKey : functionalKeys) {
-                    ReadOffHeapUniqueIndex readOffHeapIndex = readHeapService.getIndex(offHeapUniqueIndex);
-                    OffHeapRef offHeapRef = readOffHeapIndex.find(functionalKey);
-                    Assert.assertTrue(offHeapRef.index() != -1);
-                    Assert.assertNotNull(offHeapRef);
-                    Optional<Glob> data = readHeapService.read(offHeapRef);
-                    Assert.assertTrue(data.isPresent());
-//
-//                Assert.assertEquals("at " + i, 10 + i % 100, data.get().get(DummyObject1.maxValue).intValue());
-//                Assert.assertEquals( "a name " + (i % MODULO), data.get().get(DummyObject1.name));
+                    final OffHeapRefs offHeapRefs = readOffHeapMultiIndex.find(functionalKey);
+                    Assert.assertNotNull(offHeapRefs);
+                    AtomicInteger count = new AtomicInteger();
+                    readHeapService.read(offHeapRefs, _ -> count.incrementAndGet());
+                    Assert.assertEquals(SIZE / MODULO, count.get());
+                    readOffHeapMultiIndex.free(offHeapRefs);
                 }
             }
-            long endIndex = System.nanoTime();
-            System.out.println("find by unique index " + TimeUnit.NANOSECONDS.toMillis(endIndex - startIndex) + " ms " +
-                               TimeUnit.NANOSECONDS.toMicros(endIndex - startIndex) / ((double) loop * functionalKeys.length) + "µs/search");
-
         }
+        long endIndex = System.nanoTime();
+        System.out.println("find by multi index " + TimeUnit.NANOSECONDS.toMillis(endIndex - startIndex) +
+                           " ms " + TimeUnit.NANOSECONDS.toMicros(endIndex - startIndex) / ((double) functionalKeys.length * loop) + "µs/search");
+    }
 
-        {
-            ReadOffHeapMultiIndex readOffHeapMultiIndex = readHeapService.getIndex(offHeapMultiIndex);
-            System.out.println("start multi");
-            long startIndex = System.nanoTime();
-            for (int i = 0; i < loop; i++) {
-                {
-                    for (FunctionalKey functionalKey : functionalKeys) {
-                        final OffHeapRefs offHeapRefs = readOffHeapMultiIndex.find(functionalKey);
-                        Assert.assertNotNull(offHeapRefs);
-                        AtomicInteger count = new AtomicInteger();
-                        readHeapService.read(offHeapRefs, _ -> count.incrementAndGet());
-                        Assert.assertEquals(SIZE / MODULO, count.get());
-                        readOffHeapMultiIndex.free(offHeapRefs);
-                    }
-                }
+    private static void findByIndex(int loop, FunctionalKey[] functionalKeys, OffHeapReadService readHeapService, OffHeapUniqueIndex offHeapUniqueIndex) {
+        long startIndex = System.nanoTime();
+        for (int i = 0; i < loop; i++) {
+            for (FunctionalKey functionalKey : functionalKeys) {
+                ReadOffHeapUniqueIndex readOffHeapIndex = readHeapService.getIndex(offHeapUniqueIndex);
+                OffHeapRef offHeapRef = readOffHeapIndex.find(functionalKey);
+                Assert.assertTrue(offHeapRef.index() != -1);
+                Assert.assertNotNull(offHeapRef);
+                Optional<Glob> data = readHeapService.read(offHeapRef);
+                Assert.assertTrue(data.isPresent());
+                final Glob glob = data.get();
+                Assert.assertEquals("at " + i, 10 + (glob.get(DummyObject1.val1)) % 100, glob.get(DummyObject1.maxValue).intValue());
+                Assert.assertEquals( "a name " + ((glob.get(DummyObject1.val1)) % MODULO), glob.get(DummyObject1.name));
             }
-            long endIndex = System.nanoTime();
-            System.out.println("find by multi index " + TimeUnit.NANOSECONDS.toMillis(endIndex - startIndex) +
-                               " ms " + TimeUnit.NANOSECONDS.toMicros(endIndex - startIndex) / ((double) functionalKeys.length * loop) + "µs/search");
         }
+        long endIndex = System.nanoTime();
+        System.out.println("find by unique index " + TimeUnit.NANOSECONDS.toMillis(endIndex - startIndex) + " ms " +
+                           TimeUnit.NANOSECONDS.toMicros(endIndex - startIndex) / ((double) loop * functionalKeys.length) + "µs/search");
+    }
+
+    private static void selectRead(OffHeapReadService readHeapService, List<Glob> globs) throws IOException {
+        List<Glob> received = new ArrayList<>();
+        final long startRead = System.currentTimeMillis();
+        readHeapService.readAll(glob -> {
+            received.add(glob);
+        }, Set.of(DummyObject1.val1, DummyObject1.data1));
+        System.out.println("Read " + (System.currentTimeMillis() - startRead) + " ms");
+
+        Assert.assertEquals(globs.size(), received.size());
+        final Glob glob = received.get(0);
+        final Integer val1 = glob.get(DummyObject1.val1);
+        Assert.assertEquals(10 + val1 % 100, glob.get(DummyObject1.data1).longValue());
+    }
+
+    private static void loopRead(OffHeapReadService readHeapService, List<Glob> globs) throws IOException {
+        List<Glob> received = new ArrayList<>();
+        final long startRead = System.currentTimeMillis();
+        readHeapService.readAll(glob -> {
+            received.add(glob);
+        });
+        System.out.println("Read " + (System.currentTimeMillis() - startRead) + " ms");
+
+        Assert.assertEquals(globs.size(), received.size());
+        final Glob glob = received.get(0);
+        final Integer i1 = glob.get(DummyObject1.val1);
+        Assert.assertArrayEquals(new int[]{i1, i1 + 1, i1 + 2}, glob.get(DummyObject1.data));
     }
 
 
@@ -182,11 +214,16 @@ public class TestShared {
 
         public static final LongField data1;
 
-        public static final LongField data2;
+        public static final DoubleField data2;
 
-        public static final LongField data3;
+        public static final DateField data3;
 
-        public static final LongField data4;
+        public static final DateTimeField data4;
+
+        public static final BooleanField data5;
+
+        public static final LongField data6;
+
 
         static {
             final GlobTypeBuilder globTypeBuilder = GlobTypeBuilderFactory.create("DummyObject1");
@@ -196,9 +233,11 @@ public class TestShared {
             val2 = globTypeBuilder.declareIntegerField("val2");
             data = globTypeBuilder.declareIntegerArrayField("data", ArraySize.create(3));
             data1 = globTypeBuilder.declareLongField("data1");
-            data2 = globTypeBuilder.declareLongField("data2");
-            data3 = globTypeBuilder.declareLongField("data3");
-            data4 = globTypeBuilder.declareLongField("data4");
+            data2 = globTypeBuilder.declareDoubleField("data2");
+            data3 = globTypeBuilder.declareDateField("data3");
+            data4 = globTypeBuilder.declareDateTimeField("data4");
+            data5 = globTypeBuilder.declareBooleanField("data5");
+            data6 = globTypeBuilder.declareLongField("data6");
             maxValue = globTypeBuilder.declareIntegerField("maxValue");
             globTypeBuilder.complete();
         }

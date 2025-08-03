@@ -1,6 +1,7 @@
 package org.globsframework.shared.mem.impl.field.handleacces;
 
 import org.globsframework.core.metamodel.annotations.ArraySize;
+import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.metamodel.fields.IntegerArrayField;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
@@ -29,9 +30,16 @@ public class IntArrayFieldHandleAccess implements HandleAccess {
 
     public static HandleAccess create(GroupLayout groupLayout, IntegerArrayField field) {
         int size = field.getAnnotation(ArraySize.KEY).getNotNull(ArraySize.VALUE);
-        final VarHandle lenHandle = groupLayout.varHandle(MemoryLayout.PathElement.groupElement(field.getName() + DefaultOffHeapService.SUFFIX_LEN));
-        final VarHandle arrayHandle = groupLayout.varHandle(MemoryLayout.PathElement.groupElement(field.getName()), MemoryLayout.PathElement.sequenceElement());
+        final VarHandle lenHandle = groupLayout.varHandle(MemoryLayout.PathElement.groupElement(field.getName() + DefaultOffHeapService.STRING_SUFFIX_LEN));
+        final VarHandle arrayHandle = groupLayout.varHandle(
+                MemoryLayout.PathElement.groupElement(field.getName()),
+                MemoryLayout.PathElement.sequenceElement());
         return new IntArrayFieldHandleAccess(lenHandle, arrayHandle, size, field);
+    }
+
+    @Override
+    public Field getField() {
+        return field;
     }
 
     @Override

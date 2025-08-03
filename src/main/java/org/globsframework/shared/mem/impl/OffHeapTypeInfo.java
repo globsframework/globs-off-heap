@@ -1,13 +1,8 @@
 package org.globsframework.shared.mem.impl;
 
 import org.globsframework.core.metamodel.GlobType;
-import org.globsframework.core.metamodel.fields.Field;
-import org.globsframework.core.metamodel.fields.IntegerArrayField;
-import org.globsframework.core.metamodel.fields.StringField;
-import org.globsframework.shared.mem.impl.field.handleacces.AnyFieldHandleAccess;
-import org.globsframework.shared.mem.impl.field.handleacces.HandleAccess;
-import org.globsframework.shared.mem.impl.field.handleacces.IntArrayFieldHandleAccess;
-import org.globsframework.shared.mem.impl.field.handleacces.StringFieldHandleAccess;
+import org.globsframework.core.metamodel.fields.*;
+import org.globsframework.shared.mem.impl.field.handleacces.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,13 +27,19 @@ public class OffHeapTypeInfo {
         handleAccesses = new HandleAccess[fields.length];
         for (int i = 0; i < fields.length; i++) {
             Field field = fields[i];
-            if (field instanceof StringField) {
-                handleAccesses[i] = StringFieldHandleAccess.create(groupLayout, (StringField) field);
-            } else if (field instanceof IntegerArrayField) {
-                handleAccesses[i] = IntArrayFieldHandleAccess.create(groupLayout, (IntegerArrayField) field);
-            } else {
-                handleAccesses[i] = AnyFieldHandleAccess.create(groupLayout, field);
-            }
+            handleAccesses[i] = switch (field) {
+                case BooleanField booleanField -> BooleanFieldHandleAccess.create(groupLayout, booleanField);
+                case IntegerField integerField -> IntegerFieldHandleAccess.create(groupLayout, integerField);
+                case DoubleField doubleField -> DoubleFieldHandleAccess.create(groupLayout, doubleField);
+                case LongField longField -> LongFieldHandleAccess.create(groupLayout, longField);
+                case StringField strField -> StringFieldHandleAccess.create(groupLayout, strField);
+                case DateField dateField -> DateFieldHandleAccess.create(groupLayout, dateField);
+                case DateTimeField dateField -> DateTimeFieldHandleAccess.create(groupLayout, dateField);
+                case IntegerArrayField integerArrayField ->
+                        IntArrayFieldHandleAccess.create(groupLayout, integerArrayField);
+                default ->
+                        throw new RuntimeException("Field " + field.getDataType() + " not supported for " + field.getFullName());
+            };
         }
         long mod = groupLayout.byteSize() % groupLayout.byteAlignment();
         sizeWithPadding = groupLayout.byteSize() + (mod != 0 ? groupLayout.byteAlignment() - mod : 0);

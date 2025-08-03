@@ -1,12 +1,10 @@
 package org.globsframework.shared.mem;
 
+import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.model.Glob;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.function.Consumer;
 
 public interface OffHeapReadService {
@@ -15,6 +13,8 @@ public interface OffHeapReadService {
     ReadOffHeapMultiIndex getIndex(OffHeapNotUniqueIndex index);
 
     void readAll(DataConsumer consumer) throws IOException;
+
+    void readAll(DataConsumer consumer, Set<Field> onlyFields) throws IOException;
 
     Optional<Glob> read(OffHeapRef offHeapRef);
 

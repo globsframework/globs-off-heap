@@ -1,5 +1,6 @@
 package org.globsframework.shared.mem.impl.field.handleacces;
 
+import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.metamodel.fields.StringField;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
@@ -25,9 +26,14 @@ public class StringFieldHandleAccess implements HandleAccess {
     }
 
     public static StringFieldHandleAccess create(GroupLayout groupLayout, StringField stringField) {
-        final VarHandle addHandle = groupLayout.varHandle(MemoryLayout.PathElement.groupElement(stringField.getName() + DefaultOffHeapService.SUFFIX_ADDR));
-        final VarHandle lenHandle = groupLayout.varHandle(MemoryLayout.PathElement.groupElement(stringField.getName() + DefaultOffHeapService.SUFFIX_LEN));
+        final VarHandle addHandle = groupLayout.varHandle(MemoryLayout.PathElement.groupElement(stringField.getName() + DefaultOffHeapService.STRING_SUFFIX_ADDR));
+        final VarHandle lenHandle = groupLayout.varHandle(MemoryLayout.PathElement.groupElement(stringField.getName() + DefaultOffHeapService.STRING_SUFFIX_LEN));
         return new StringFieldHandleAccess(stringField, lenHandle, addHandle);
+    }
+
+    @Override
+    public Field getField() {
+        return stringField;
     }
 
     @Override
