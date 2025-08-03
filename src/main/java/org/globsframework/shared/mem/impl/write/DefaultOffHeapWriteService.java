@@ -52,7 +52,7 @@ public class DefaultOffHeapWriteService implements OffHeapWriteService {
         final Map<String, Glob> allStrings = createStringsFile(globs, offHeapTypeInfo, path.resolve(DefaultOffHeapService.STRINGS_DATA));
 
         final IdentityHashMap<Glob, Long> offsetPerData =
-                saveData(path.resolve(DefaultOffHeapService.CONTENT_DATA), offHeapTypeInfo, globs, 100, allStrings);
+                saveData(path.resolve(DefaultOffHeapService.CONTENT_DATA), offHeapTypeInfo, globs, 1024*1024, allStrings);
 
         for (Map.Entry<String, Index> entry : index.entrySet()) {
             final FunctionalKeyBuilder functionalKeyBuilder = entry.getValue().getKeyBuilder();

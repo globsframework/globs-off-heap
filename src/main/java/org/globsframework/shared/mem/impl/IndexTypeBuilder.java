@@ -3,16 +3,10 @@ package org.globsframework.shared.mem.impl;
 import org.globsframework.core.metamodel.GlobType;
 import org.globsframework.core.metamodel.GlobTypeBuilder;
 import org.globsframework.core.metamodel.GlobTypeBuilderFactory;
-import org.globsframework.core.metamodel.fields.Field;
-import org.globsframework.core.metamodel.fields.IntegerField;
-import org.globsframework.core.metamodel.fields.LongField;
-import org.globsframework.core.metamodel.fields.StringField;
+import org.globsframework.core.metamodel.fields.*;
 import org.globsframework.core.model.globaccessor.set.GlobSetIntAccessor;
 import org.globsframework.core.model.globaccessor.set.GlobSetLongAccessor;
-import org.globsframework.shared.mem.impl.field.dataaccess.AnyDataAccess;
-import org.globsframework.shared.mem.impl.field.dataaccess.DataAccess;
-import org.globsframework.shared.mem.impl.field.dataaccess.IntDataAccess;
-import org.globsframework.shared.mem.impl.field.dataaccess.StringDataAccess;
+import org.globsframework.shared.mem.impl.field.dataaccess.*;
 
 import java.lang.foreign.GroupLayout;
 import java.lang.foreign.MemoryLayout;
@@ -50,8 +44,8 @@ public class IndexTypeBuilder {
         for (int j = 0; j < keyFields.length; j++) {
             Field field = keyFields[j];
             if (field instanceof StringField) {
-                strArr[j] = keyTypeBuilder.declareIntegerField(field.getName() + DefaultOffHeapService.SUFFIX_ADDR, List.of());
-                strLen[j] = keyTypeBuilder.declareIntegerField(field.getName() + DefaultOffHeapService.SUFFIX_LEN, List.of());
+                strArr[j] = keyTypeBuilder.declareIntegerField(field.getName() + DefaultOffHeapService.STRING_SUFFIX_ADDR, List.of());
+                strLen[j] = keyTypeBuilder.declareIntegerField(field.getName() + DefaultOffHeapService.STRING_SUFFIX_LEN, List.of());
             } else {
                 indexFields[j] = keyTypeBuilder.declare(field.getName(), field.getDataType(), List.of());
             }
@@ -71,13 +65,15 @@ public class IndexTypeBuilder {
 
         for (int i = 0; i < keyFields.length; i++) {
             Field keyField = keyFields[i];
-            if (keyField instanceof StringField stringField) {
-                dataAccesses[i] = StringDataAccess.create(groupLayout, stringField);
-            } else if (keyField instanceof IntegerField  integerField){
-                dataAccesses[i] = IntDataAccess.create(groupLayout, integerField);
-            } else {
-                dataAccesses[i] = AnyDataAccess.create(groupLayout, keyField);
-            }
+            dataAccesses[i] = switch (keyField) {
+                case StringField field -> StringDataAccess.create(groupLayout, field);
+                case IntegerField field -> IntDataAccess.create(groupLayout, field);
+                case LongField field -> LongDataAccess.create(groupLayout, field);
+                case DoubleField field -> DoubleDataAccess.create(groupLayout, field);
+                case BooleanField field -> BooleanDataAccess.create(groupLayout, field);
+                case DateField field -> DateDataAccess.create(groupLayout, field);
+                default -> AnyDataAccess.create(groupLayout, keyField);
+            };
         }
 
         dataOffsetArrayHandle = groupLayout.arrayElementVarHandle(MemoryLayout.PathElement.groupElement("dataOffset1"));

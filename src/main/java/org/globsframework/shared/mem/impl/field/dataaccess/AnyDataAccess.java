@@ -19,8 +19,7 @@ public class AnyDataAccess implements DataAccess {
         this.varHandle = varHandle;
     }
 
-    @Override
-    public Object get(MemorySegment memorySegment, long index, StringAccessorByAddress stringAccessorByAddress) {
+    private Object get(MemorySegment memorySegment, long index, StringAccessorByAddress stringAccessorByAddress) {
         return varHandle.get(memorySegment, 0L, index);
     }
 

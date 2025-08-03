@@ -4,7 +4,6 @@ import org.globsframework.core.functional.FunctionalKeyBuilder;
 import org.globsframework.core.metamodel.GlobType;
 import org.globsframework.shared.mem.*;
 import org.globsframework.shared.mem.impl.read.DefaultOffHeapReadService;
-import org.globsframework.shared.mem.impl.read.ReadIndex;
 import org.globsframework.shared.mem.impl.write.DefaultOffHeapWriteService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,8 +15,13 @@ import java.util.*;
 
 public class DefaultOffHeapService implements OffHeapService {
     private static final Logger log = LoggerFactory.getLogger(DefaultOffHeapService.class);
-    public static final String SUFFIX_ADDR = "_addr";
-    public static final String SUFFIX_LEN = "_len";
+    public static final String STRING_SUFFIX_ADDR = "_addr_";
+    public static final String STRING_SUFFIX_LEN = "_len_";
+    public static final String DATE_TIME_DATE_SUFFIX = "_date_";
+    public static final String DATE_TIME_TIME_SUFFIX = "_time_";
+    public static final String DATE_TIME_NANO_SUFFIX = "_nano_";
+    public static final String DATE_TIME_ZONE_ID_SUFFIX = "_zoneId_";
+    public static final int DATE_TIME_MAX_ZONE_ID_SIZE = 52; // to be align with 8 Bytes
     public static final String CONTENT_DATA = "content.data";
     public static final String STRINGS_DATA = "strings.data";
     private final OffHeapTypeInfo offHeapTypeInfo;
@@ -42,8 +46,8 @@ public class DefaultOffHeapService implements OffHeapService {
     }
 
     @Override
-    public OffHeapWriteService createWrite(Path file, Arena arena) throws IOException {
-        return new DefaultOffHeapWriteService(file, arena, offHeapTypeInfo, index);
+    public OffHeapWriteService createWrite(Path directory, Arena arena) throws IOException {
+        return new DefaultOffHeapWriteService(directory, arena, offHeapTypeInfo, index);
     }
 
     @Override
@@ -52,11 +56,11 @@ public class DefaultOffHeapService implements OffHeapService {
     }
 
     public static String getIndexNameFile(String indexName) {
-        return indexName + ".data";
+        return indexName + "Unique.data";
     }
 
     public static String getIndexDataNameFile(String indexName) {
-        return indexName + "ManyRefs" + ".data";
+        return indexName + "Many.data";
     }
 
 }
