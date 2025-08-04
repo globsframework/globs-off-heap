@@ -4,7 +4,7 @@
     <packaging>jar</packaging>
     <artifactId>globs-shared</artifactId>
     <name>Generic Lightweight ObjectS Off Heap shared</name>
-    <version>4.2.0</version>
+    <version>4.3-SNAPSHOT</version>
 
     <repositories>
         <repository>
@@ -17,7 +17,7 @@
         <connection>scm:git:git@github.com:globsframework/globs-ffm</connection>
         <developerConnection>scm:git:git@github.com:globsframework/globs-ffm</developerConnection>
         <url>https://github.com/globsframework/globs-ffm</url>
-      <tag>4.2.0</tag>
+      <tag>HEAD</tag>
   </scm>
 
     <distributionManagement>
