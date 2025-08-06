@@ -7,7 +7,7 @@ import java.io.IOException;
 import java.util.*;
 import java.util.function.Consumer;
 
-public interface OffHeapReadService {
+public interface OffHeapReadService extends AutoCloseable {
     ReadOffHeapUniqueIndex getIndex(OffHeapUniqueIndex index);
 
     ReadOffHeapMultiIndex getIndex(OffHeapNotUniqueIndex index);
@@ -34,4 +34,6 @@ public interface OffHeapReadService {
         });
         return globs;
     }
+
+    void close() throws IOException;
 }

@@ -9,6 +9,7 @@ import org.globsframework.shared.mem.*;
 import org.globsframework.shared.mem.impl.*;
 import org.globsframework.shared.mem.impl.field.handleacces.HandleAccess;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -54,7 +55,6 @@ public class DefaultOffHeapReadService implements OffHeapReadService, StringAcce
         dataSize = dataChannel.size();
     }
 
-    @Override
     public ReadOffHeapUniqueIndex getIndex(OffHeapUniqueIndex index) {
         return (ReadOffHeapUniqueIndex) indexMap.get(index.getName());
     }
@@ -63,7 +63,6 @@ public class DefaultOffHeapReadService implements OffHeapReadService, StringAcce
         return (ReadOffHeapMultiIndex) indexMap.get(index.getName());
     }
 
-    @Override
     public void read(OffHeapRefs offHeapRef, DataConsumer consumer) {
         ReadContext readContext = new ReadContext(this::get);
         final long[] offset = offHeapRef.offset().getOffset();
@@ -75,7 +74,6 @@ public class DefaultOffHeapReadService implements OffHeapReadService, StringAcce
         }
     }
 
-    @Override
     public void readAll(DataConsumer consumer) throws IOException {
         final ReadContext readContext = new ReadContext(this);
         final long groupSize = offHeapTypeInfo.groupLayout.byteSize();
@@ -92,7 +90,6 @@ public class DefaultOffHeapReadService implements OffHeapReadService, StringAcce
         }
     }
 
-    @Override
     public void readAll(DataConsumer consumer, Set<Field> onlyFields) throws IOException {
         final ReadContext readContext = new ReadContext(this);
         final long groupSize = offHeapTypeInfo.groupLayout.byteSize();
@@ -129,7 +126,6 @@ public class DefaultOffHeapReadService implements OffHeapReadService, StringAcce
         return instantiate;
     }
 
-    @Override
     public Optional<Glob> read(OffHeapRef offHeapRef) {
         ReadContext readContext = new ReadContext(this);
         final MutableGlob instantiate =
@@ -137,7 +133,6 @@ public class DefaultOffHeapReadService implements OffHeapReadService, StringAcce
         return Optional.of(instantiate);
     }
 
-    @Override
     synchronized public String get(int addr, int len) {
         String s = readStrings.get(addr);
         if (s == null) {
@@ -150,5 +145,19 @@ public class DefaultOffHeapReadService implements OffHeapReadService, StringAcce
             readStrings.put(addr, s);
         }
         return s;
+    }
+
+    public void close() throws IOException {
+        for (ReadIndex value : indexMap.values()) {
+            try {
+                ((AutoCloseable)value).close();
+            } catch (Exception e) {
+            }
+        }
+        try {
+            stringChannel.close();
+        } catch (IOException e) {
+        }
+        dataChannel.close();
     }
 }

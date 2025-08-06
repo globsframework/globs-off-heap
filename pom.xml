@@ -1,9 +1,11 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <modelVersion>4.0.0</modelVersion>
+    <description>Globs library to read and write glob off heap (based on index). </description>
+    <url>https://globsframework.org</url>
     <groupId>org.globsframework</groupId>
     <packaging>jar</packaging>
-    <artifactId>globs-shared</artifactId>
-    <name>Generic Lightweight ObjectS Off Heap shared</name>
+    <artifactId>globs-off-heap</artifactId>
+    <name>Generic Lightweight ObjectS Off Heap access </name>
     <version>4.3-SNAPSHOT</version>
 
     <repositories>
@@ -59,11 +61,6 @@
         <dependency>
             <groupId>org.globsframework</groupId>
             <artifactId>globs</artifactId>
-            <version>4.2.0</version>
-        </dependency>
-        <dependency>
-            <groupId>org.globsframework</groupId>
-            <artifactId>globs-bin-serialisation</artifactId>
             <version>4.2.0</version>
         </dependency>
         <dependency>
