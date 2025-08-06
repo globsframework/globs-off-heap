@@ -43,7 +43,6 @@ public class OffHeapTypeInfo {
         }
         long mod = groupLayout.byteSize() % groupLayout.byteAlignment();
         sizeWithPadding = groupLayout.byteSize() + (mod != 0 ? groupLayout.byteAlignment() - mod : 0);
-        System.out.println("OffHeapTypeInfo sizeWithPadding " + sizeWithPadding);
     }
 
     public long byteSizeWithPadding() {
