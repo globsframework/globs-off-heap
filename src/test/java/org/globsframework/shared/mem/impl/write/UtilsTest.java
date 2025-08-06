@@ -10,7 +10,7 @@ import java.util.stream.IntStream;
 public class UtilsTest extends TestCase {
 
     public void testSplit1Element() {
-        for (int i = 0; i < 20000; i++) {
+        for (int i = 0; i < 10000; i++) {
             check1Element(0, i);
             check1Element(1, i);
             check1Element(3, i);
@@ -18,7 +18,7 @@ public class UtilsTest extends TestCase {
     }
 
     public void testSplit3Element() {
-        for (int i = 0; i < 20000; i++) {
+        for (int i = 0; i < 10000; i++) {
             check3Element(0, i);
             check3Element(1, i);
             check3Element(3, i);

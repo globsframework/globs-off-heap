@@ -11,6 +11,7 @@ import org.globsframework.shared.mem.impl.IndexTypeBuilder;
 import org.globsframework.shared.mem.impl.StringAccessorByAddress;
 import org.globsframework.shared.mem.impl.field.dataaccess.DataAccess;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -20,7 +21,7 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
-public class DefaultReadOffHeapManyIndex implements ReadOffHeapMultiIndex, ReadIndex {
+public class DefaultReadOffHeapManyIndex implements ReadOffHeapMultiIndex, ReadIndex, Closeable {
     public static final VarHandle LONG_VAR_HANDLE = ValueLayout.JAVA_LONG.varHandle();
     private final OffHeapNotUniqueIndex offHeapIndex;
     private final StringAccessorByAddress stringAccessor;
@@ -120,5 +121,14 @@ public class DefaultReadOffHeapManyIndex implements ReadOffHeapMultiIndex, ReadI
 
     public boolean isUnique() {
         return false;
+    }
+
+    @Override
+    public void close() throws IOException {
+        try {
+            indexChannel.close();
+        } catch (IOException e) {
+        }
+        indexDataRefChannel.close();
     }
 }
