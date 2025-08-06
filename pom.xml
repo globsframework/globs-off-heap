@@ -6,7 +6,7 @@
     <packaging>jar</packaging>
     <artifactId>globs-off-heap</artifactId>
     <name>Generic Lightweight ObjectS Off Heap access </name>
-    <version>4.3.0</version>
+    <version>4.4-SNAPSHOT</version>
 
     <developers>
         <developer>
