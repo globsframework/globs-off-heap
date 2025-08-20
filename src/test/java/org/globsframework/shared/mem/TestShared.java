@@ -8,8 +8,11 @@ import org.globsframework.core.metamodel.GlobTypeBuilder;
 import org.globsframework.core.metamodel.GlobTypeBuilderFactory;
 import org.globsframework.core.metamodel.annotations.ArraySize;
 import org.globsframework.core.metamodel.annotations.ArraySize_;
+import org.globsframework.core.metamodel.annotations.MaxSize;
+import org.globsframework.core.metamodel.annotations.MaxSize_;
 import org.globsframework.core.metamodel.fields.*;
 import org.globsframework.core.model.Glob;
+import org.globsframework.core.model.MutableGlob;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -30,6 +33,8 @@ public class TestShared {
 //    public static final int MODULO = 1_000_000;
     public static final int SIZE = 500_000;
     public static final int MODULO = 50_000;
+//    public static final int SIZE = 5_000;
+//    public static final int MODULO = 500;
 
     @Test
     public void buildApi() throws IOException {
@@ -37,20 +42,7 @@ public class TestShared {
         List<Glob> globs = new ArrayList<>();
         for (int i = 0; i < SIZE; i++) {
             final LocalDate localDate = LocalDate.of(1900 + (i % 200), i % 11 + 1, i % 28 + 1);
-            globs.add(DummyObject1.TYPE.instantiate()
-                    .set(DummyObject1.val1, i)
-                    .set(DummyObject1.val2, (i % MODULO))
-                    .set(DummyObject1.name, "a name " + (i % MODULO))
-                    .set(DummyObject1.data1, 10 + i % 100)
-                    .set(DummyObject1.data2, 10 + i % 100)
-                    .set(DummyObject1.data3, localDate)
-                    .set(DummyObject1.data4, ZonedDateTime.of(localDate, LocalTime.of(i % 24, i % 60, 1 % 60), ZoneId.systemDefault()))
-                    .set(DummyObject1.maxValue, 10 + i % 100)
-                    .set(DummyObject1.data, new int[]{i, i+1, i+2})
-                    .set(DummyObject1.data5, i % 2 == 0)
-                    .set(DummyObject1.data6, (long) i * i)
-            )
-            ;
+            globs.add(createData(i, localDate));
         }
 
         final FunctionalKeyBuilder uniqueFunctionalKeyBuilder =
@@ -75,7 +67,7 @@ public class TestShared {
         final Path path = Path.of("/tmp/test");
         Files.createDirectories(path);
         OffHeapWriteService offHeapWriteService =
-                offHeapService.createWrite(path, arena);
+                offHeapService.createWrite(path);
 
         final long startWrite = System.currentTimeMillis();
         offHeapWriteService.save(globs);
@@ -128,6 +120,70 @@ public class TestShared {
         }
     }
 
+    private static MutableGlob createData(int i, LocalDate localDate) {
+        return DummyObject1.TYPE.instantiate()
+                .set(DummyObject1.val1, i)
+                .set(DummyObject1.val2, (i % MODULO))
+                .set(DummyObject1.name, "a name " + (i % MODULO))
+                .set(DummyObject1.data1, 10 + i % 100)
+                .set(DummyObject1.data2, 10 + i % 100)
+                .set(DummyObject1.data3, localDate)
+                .set(DummyObject1.data4, ZonedDateTime.of(localDate, LocalTime.of(i % 24, i % 60, 1 % 60), ZoneId.systemDefault()))
+                .set(DummyObject1.maxValue, 10 + i % 100)
+                .set(DummyObject1.data, new int[]{i, i + 1, i + 2})
+                .set(DummyObject1.data5, i % 2 == 0)
+                .set(DummyObject1.data6, (long) i * i)
+                .set(DummyObject1.fixSizeStrAllowTruncate, "\u24FF\uFD34zdfeéd32" + i) // 10 chars with not latin1 char.
+                .set(DummyObject1.fixSizeStrNoTruncate, "\u63FF\uAF34" + i);  // 22 chars with not latin1 char
+    }
+
+    @Test
+    public void testStringWithFixSize() throws IOException {
+        List<Glob> globs = new ArrayList<>();
+        globs.add(createData(1, LocalDate.of(1900, 1, 1)));
+        globs.add(createData(1000, LocalDate.of(1900, 1, 1)));
+        globs.add(createData(1_000_000, LocalDate.of(1900, 1, 1)));
+
+        final FunctionalKeyBuilder uniqueFunctionalKeyBuilder =
+                FunctionalKeyBuilderFactory.create(DummyObject1.TYPE)
+                        .add(DummyObject1.fixSizeStrNoTruncate)
+                        .create();
+
+        OffHeapService offHeapService = OffHeapService.create(DummyObject1.TYPE);
+        OffHeapUniqueIndex offHeapUniqueIndex = offHeapService.declareUniqueIndex("uniqueIndex", uniqueFunctionalKeyBuilder);
+
+
+        Arena arena = Arena.ofShared();
+
+        final Path path = Path.of("/tmp/test");
+        Files.createDirectories(path);
+        OffHeapWriteService offHeapWriteService =
+                offHeapService.createWrite(path);
+
+        offHeapWriteService.save(globs);
+
+        offHeapWriteService.close();
+        OffHeapReadService readHeapService = offHeapService.createRead(
+                Path.of("/tmp/test"), arena);
+
+        List<Glob> readData = new ArrayList<>();
+        readHeapService.readAll(glob -> readData.add(glob));
+        Assert.assertEquals(3, globs.size());
+        Assert.assertEquals("\u63FF\uAF341", globs.get(0).get(DummyObject1.fixSizeStrNoTruncate));
+        final ReadOffHeapUniqueIndex index = readHeapService.getIndex(offHeapUniqueIndex);
+
+        check(index, uniqueFunctionalKeyBuilder, readHeapService, 1);
+        check(index, uniqueFunctionalKeyBuilder, readHeapService, 1000);
+        check(index, uniqueFunctionalKeyBuilder, readHeapService, 1_000_000);
+    }
+
+    private static void check(ReadOffHeapUniqueIndex index, FunctionalKeyBuilder uniqueFunctionalKeyBuilder, OffHeapReadService readHeapService, int pos) {
+        final OffHeapRef offHeapRef = index.find(uniqueFunctionalKeyBuilder.create().set(DummyObject1.fixSizeStrNoTruncate, "\u63FF\uAF34" + pos).getShared());
+        Assert.assertNotNull(offHeapRef);
+        final Glob read = readHeapService.read(offHeapRef).get();
+        Assert.assertEquals(pos, read.get(DummyObject1.val1).intValue());
+    }
+
     private static void getMultiIndex(OffHeapReadService readHeapService, OffHeapNotUniqueIndex offHeapMultiIndex, int loop, FunctionalKey[] functionalKeys) {
         ReadOffHeapMultiIndex readOffHeapMultiIndex = readHeapService.getIndex(offHeapMultiIndex);
         System.out.println("start multi");
@@ -136,9 +192,9 @@ public class TestShared {
             {
                 for (FunctionalKey functionalKey : functionalKeys) {
                     final OffHeapRefs offHeapRefs = readOffHeapMultiIndex.find(functionalKey);
-                    Assert.assertNotNull(offHeapRefs);
+                    Assert.assertNotNull(functionalKey.toString(), offHeapRefs);
                     AtomicInteger count = new AtomicInteger();
-                    readHeapService.read(offHeapRefs, _ -> count.incrementAndGet());
+                    Assert.assertEquals(SIZE / MODULO, readHeapService.read(offHeapRefs, _ -> count.incrementAndGet()));
                     Assert.assertEquals(SIZE / MODULO, count.get());
                     readOffHeapMultiIndex.free(offHeapRefs);
                 }
@@ -155,8 +211,8 @@ public class TestShared {
             for (FunctionalKey functionalKey : functionalKeys) {
                 ReadOffHeapUniqueIndex readOffHeapIndex = readHeapService.getIndex(offHeapUniqueIndex);
                 OffHeapRef offHeapRef = readOffHeapIndex.find(functionalKey);
-                Assert.assertTrue(offHeapRef.index() != -1);
-                Assert.assertNotNull(offHeapRef);
+                Assert.assertNotNull(functionalKey.toString(), offHeapRef);
+                Assert.assertTrue(functionalKey.toString(), offHeapRef.index() != -1);
                 Optional<Glob> data = readHeapService.read(offHeapRef);
                 Assert.assertTrue(data.isPresent());
                 final Glob glob = data.get();
@@ -224,6 +280,11 @@ public class TestShared {
 
         public static final LongField data6;
 
+        @MaxSize_(value = 13, allow_truncate = true)
+        public static final StringField fixSizeStrAllowTruncate;
+
+        @MaxSize_(value = 22, allow_truncate = false)
+        public static final StringField fixSizeStrNoTruncate;
 
         static {
             final GlobTypeBuilder globTypeBuilder = GlobTypeBuilderFactory.create("DummyObject1");
@@ -239,6 +300,8 @@ public class TestShared {
             data5 = globTypeBuilder.declareBooleanField("data5");
             data6 = globTypeBuilder.declareLongField("data6");
             maxValue = globTypeBuilder.declareIntegerField("maxValue");
+            fixSizeStrAllowTruncate = globTypeBuilder.declareStringField("fixSizeStrAllowTruncate", MaxSize.create(13, true));
+            fixSizeStrNoTruncate = globTypeBuilder.declareStringField("fixSizeStrNoTruncate", MaxSize.create(22, false));
             globTypeBuilder.complete();
         }
     }

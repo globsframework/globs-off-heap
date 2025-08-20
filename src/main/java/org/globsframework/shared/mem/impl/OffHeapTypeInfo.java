@@ -1,6 +1,7 @@
 package org.globsframework.shared.mem.impl;
 
 import org.globsframework.core.metamodel.GlobType;
+import org.globsframework.core.metamodel.annotations.MaxSize;
 import org.globsframework.core.metamodel.fields.*;
 import org.globsframework.shared.mem.impl.field.handleacces.*;
 import org.slf4j.Logger;
@@ -32,7 +33,9 @@ public class OffHeapTypeInfo {
                 case IntegerField integerField -> IntegerFieldHandleAccess.create(groupLayout, integerField);
                 case DoubleField doubleField -> DoubleFieldHandleAccess.create(groupLayout, doubleField);
                 case LongField longField -> LongFieldHandleAccess.create(groupLayout, longField);
-                case StringField strField -> StringFieldHandleAccess.create(groupLayout, strField);
+                case StringField strField -> strField.hasAnnotation(MaxSize.KEY) ?
+                        FixSizeStringFieldHandleAccess.create(groupLayout, strField) :
+                        StringFieldHandleAccess.create(groupLayout, strField);
                 case DateField dateField -> DateFieldHandleAccess.create(groupLayout, dateField);
                 case DateTimeField dateField -> DateTimeFieldHandleAccess.create(groupLayout, dateField);
                 case IntegerArrayField integerArrayField ->

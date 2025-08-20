@@ -54,7 +54,9 @@ public class DefaultReadOffHeapManyIndex implements ReadOffHeapMultiIndex, ReadI
             int len = (int) indexTypeBuilder.dataLenOffsetArrayHandle.get(memorySegment, 0L, indexOffset);
             final long dataOffset = (long) indexTypeBuilder.dataOffsetArrayHandle.get(memorySegment, 0L, indexOffset);
             if (len == 1) {
-                return new OffHeapRefs(new LongArray(new long[]{dataOffset}));
+                final LongArray arrays = getArrays(1);
+                arrays.getOffset()[0] = dataOffset;
+                return new OffHeapRefs(arrays);
             } else {
                 return new OffHeapRefs(getDataOffset(dataOffset, len));
             }
@@ -64,14 +66,14 @@ public class DefaultReadOffHeapManyIndex implements ReadOffHeapMultiIndex, ReadI
             if (index >= 0) {
                 return binSearch(functionalKey, index);
             } else {
-                return null;
+                return OffHeapRefs.NULL;
             }
         } else {
             int index = (int) indexTypeBuilder.indexOffset2ArrayHandle.get(memorySegment, 0L, indexOffset);
             if (index >= 0) {
                 return binSearch(functionalKey, index);
             } else {
-                return null;
+                return OffHeapRefs.NULL;
             }
         }
     }
@@ -104,14 +106,10 @@ public class DefaultReadOffHeapManyIndex implements ReadOffHeapMultiIndex, ReadI
     }
 
     private int compare(FunctionalKey functionalKey, long index) {
-//        Field[] fields = indexTypeBuilder.keyFields;
         DataAccess[] handleAccesses = indexTypeBuilder.dataAccesses;
         for (int i = 0; i < handleAccesses.length; i++) {
             DataAccess handleAccess = handleAccesses[i];
             int cmp = handleAccess.compare(functionalKey, memorySegment, index, stringAccessor);
-//            final Comparable value = (Comparable) functionalKey.getValue(fields[i]);
-//            final Object o1 = handleAccess.get(memorySegment, index, stringAccessor);
-//            final int cmp = Utils.compare(value, o1);
             if (cmp != 0) {
                 return cmp;
             }

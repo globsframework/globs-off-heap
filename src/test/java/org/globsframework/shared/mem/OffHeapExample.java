@@ -57,7 +57,7 @@ public class OffHeapExample {
         Files.createDirectories(storagePath);
 
         // 7. Write data to off-heap storage
-        try (OffHeapWriteService writeService = offHeapService.createWrite(storagePath, arena)) {
+        try (OffHeapWriteService writeService = offHeapService.createWrite(storagePath)) {
             writeService.save(people);
         }
 

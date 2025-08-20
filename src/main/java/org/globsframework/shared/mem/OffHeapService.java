@@ -17,7 +17,7 @@ public interface OffHeapService {
 
     OffHeapNotUniqueIndex declareNotUniqueIndex(String name, FunctionalKeyBuilder functionalKeyBuilder);
 
-    OffHeapWriteService createWrite(Path directory, Arena arena) throws IOException;
+    OffHeapWriteService createWrite(Path directory) throws IOException;
 
     OffHeapReadService createRead(Path directory, Arena arena) throws IOException;
 }

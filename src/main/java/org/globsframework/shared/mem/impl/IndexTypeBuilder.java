@@ -3,6 +3,7 @@ package org.globsframework.shared.mem.impl;
 import org.globsframework.core.metamodel.GlobType;
 import org.globsframework.core.metamodel.GlobTypeBuilder;
 import org.globsframework.core.metamodel.GlobTypeBuilderFactory;
+import org.globsframework.core.metamodel.annotations.MaxSize;
 import org.globsframework.core.metamodel.fields.*;
 import org.globsframework.core.model.globaccessor.set.GlobSetIntAccessor;
 import org.globsframework.core.model.globaccessor.set.GlobSetLongAccessor;
@@ -11,14 +12,11 @@ import org.globsframework.shared.mem.impl.field.dataaccess.*;
 import java.lang.foreign.GroupLayout;
 import java.lang.foreign.MemoryLayout;
 import java.lang.invoke.VarHandle;
-import java.util.List;
 
 public class IndexTypeBuilder {
     public final Field[] indexFields;
     public final Field[] keyFields;
     public final DataAccess[] dataAccesses;
-    public final IntegerField[] strArr;
-    public final IntegerField[] strLen;
     public final LongField dataOffset1;     // WARN if dataLenOffset1 == 1 dataOffset1 is directly the offset of the data
     public final GlobSetLongAccessor dataOffset1Accessor;
     public final IntegerField dataLenOffset1;  // => ELSE dataOffset1 is the offset in the array off data (index not unique)
@@ -39,16 +37,9 @@ public class IndexTypeBuilder {
         dataAccesses = new DataAccess[keyFields.length];
         final GlobTypeBuilder keyTypeBuilder = GlobTypeBuilderFactory.create(indexName);
         indexFields = new Field[keyFields.length];
-        strArr = new IntegerField[keyFields.length];
-        strLen = new IntegerField[keyFields.length];
         for (int j = 0; j < keyFields.length; j++) {
             Field field = keyFields[j];
-            if (field instanceof StringField) {
-                strArr[j] = keyTypeBuilder.declareIntegerField(field.getName() + DefaultOffHeapService.STRING_SUFFIX_ADDR, List.of());
-                strLen[j] = keyTypeBuilder.declareIntegerField(field.getName() + DefaultOffHeapService.STRING_SUFFIX_LEN, List.of());
-            } else {
-                indexFields[j] = keyTypeBuilder.declare(field.getName(), field.getDataType(), List.of());
-            }
+            indexFields[j] = keyTypeBuilder.declare(field.getName(), field.getDataType(), field.streamAnnotations().toList());
         }
         dataOffset1 = keyTypeBuilder.declareLongField("dataOffset1");
         dataLenOffset1 = keyTypeBuilder.declareIntegerField("dataLenOffset1");
@@ -66,7 +57,8 @@ public class IndexTypeBuilder {
         for (int i = 0; i < keyFields.length; i++) {
             Field keyField = keyFields[i];
             dataAccesses[i] = switch (keyField) {
-                case StringField field -> StringDataAccess.create(groupLayout, field);
+                case StringField field -> field.hasAnnotation(MaxSize.KEY) ?
+                        FixSizeStringDataAccess.create(groupLayout, field) : StringDataAccess.create(groupLayout, field);
                 case IntegerField field -> IntDataAccess.create(groupLayout, field);
                 case LongField field -> LongDataAccess.create(groupLayout, field);
                 case DoubleField field -> DoubleDataAccess.create(groupLayout, field);

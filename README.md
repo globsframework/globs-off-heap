@@ -45,6 +45,7 @@ Here's a basic example of how to use the library:
 
 ```java
 package org.globsframework.shared.mem;
+
 import org.globsframework.core.functional.FunctionalKeyBuilder;
 import org.globsframework.core.functional.FunctionalKeyBuilderFactory;
 import org.globsframework.core.metamodel.GlobType;
@@ -103,7 +104,7 @@ public class OffHeapExample {
         Files.createDirectories(storagePath);
 
         // 7. Write data to off-heap storage
-        try (OffHeapWriteService writeService = offHeapService.createWrite(storagePath, arena)) {
+        try (OffHeapWriteService writeService = offHeapService.createWrite(storagePath)) {
             writeService.save(people);
         }
 

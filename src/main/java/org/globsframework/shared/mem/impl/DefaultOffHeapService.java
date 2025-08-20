@@ -46,8 +46,8 @@ public class DefaultOffHeapService implements OffHeapService {
     }
 
     @Override
-    public OffHeapWriteService createWrite(Path directory, Arena arena) throws IOException {
-        return new DefaultOffHeapWriteService(directory, arena, offHeapTypeInfo, index);
+    public OffHeapWriteService createWrite(Path directory) throws IOException {
+        return new DefaultOffHeapWriteService(directory, offHeapTypeInfo, index);
     }
 
     @Override
