@@ -13,6 +13,7 @@ import java.lang.foreign.MemorySegment;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Optional;
 
 public class DefaultReadOffHeapUniqueIndex implements ReadOffHeapUniqueIndex, ReadIndex, AutoCloseable {
     private final OffHeapUniqueIndex offHeapIndex;
@@ -44,14 +45,14 @@ public class DefaultReadOffHeapUniqueIndex implements ReadOffHeapUniqueIndex, Re
             if (index >= 0) {
                 return binSearch(functionalKey, index);
             } else {
-                return null;
+                return OffHeapRef.NULL;
             }
         } else {
             int index = (int) indexTypeBuilder.indexOffset2ArrayHandle.get(memorySegment, 0L, indexOffset);
             if (index >= 0) {
                 return binSearch(functionalKey, index);
             } else {
-                return null;
+                return OffHeapRef.NULL;
             }
         }
     }

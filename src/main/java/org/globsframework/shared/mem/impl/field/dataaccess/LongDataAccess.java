@@ -1,6 +1,5 @@
 package org.globsframework.shared.mem.impl.field.dataaccess;
 
-import org.globsframework.core.metamodel.fields.IntegerField;
 import org.globsframework.core.metamodel.fields.LongField;
 import org.globsframework.core.model.FieldValues;
 import org.globsframework.shared.mem.impl.StringAccessorByAddress;
@@ -22,7 +21,7 @@ public class LongDataAccess implements DataAccess {
     @Override
     public int compare(FieldValues functionalKey, MemorySegment memorySegment, long index, StringAccessorByAddress stringAccessorByAddress) {
         final long i = functionalKey.get(field, 0);
-        final long other = (long)varHandle.get(memorySegment, 0L, index);
+        final long other = (long) varHandle.get(memorySegment, 0L, index);
         return Long.compare(i, other);
     }
 

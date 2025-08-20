@@ -1,9 +1,11 @@
 package org.globsframework.shared.mem.impl;
 
 import org.globsframework.core.metamodel.annotations.ArraySize;
+import org.globsframework.core.metamodel.annotations.MaxSize;
 import org.globsframework.core.metamodel.fields.*;
 
 import java.lang.foreign.*;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -13,10 +15,20 @@ class GroupLayoutFieldVisitor extends FieldVisitor.AbstractWithErrorVisitor {
     int currentPos = 0;
 
     public void visitString(StringField field) {
-        addPadding(4);
-        fieldsLayout.add(ValueLayout.JAVA_INT.withName(field.getName() + DefaultOffHeapService.STRING_SUFFIX_ADDR));
-        fieldsLayout.add(ValueLayout.JAVA_INT.withName(field.getName() + DefaultOffHeapService.STRING_SUFFIX_LEN));
-        currentPos += 8;
+        if (field.hasAnnotation(MaxSize.KEY)) {
+            addPadding(4);
+            fieldsLayout.add(ValueLayout.JAVA_INT.withName(field.getName() + DefaultOffHeapService.STRING_SUFFIX_LEN));
+            final int maxSize = field.getAnnotation(MaxSize.KEY).getNotNull(MaxSize.VALUE);
+            fieldsLayout.add(MemoryLayout.sequenceLayout(maxSize, ValueLayout.JAVA_CHAR)
+                    .withName(field.getName()));
+            currentPos += maxSize * 2 + 4;
+        }
+        else {
+            addPadding(4);
+            fieldsLayout.add(ValueLayout.JAVA_INT.withName(field.getName() + DefaultOffHeapService.STRING_SUFFIX_LEN));
+            fieldsLayout.add(ValueLayout.JAVA_INT.withName(field.getName() + DefaultOffHeapService.STRING_SUFFIX_ADDR));
+            currentPos += 8;
+        }
     }
 
     private void addPadding(int size) {

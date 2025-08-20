@@ -9,7 +9,6 @@ import org.globsframework.shared.mem.*;
 import org.globsframework.shared.mem.impl.*;
 import org.globsframework.shared.mem.impl.field.handleacces.HandleAccess;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
@@ -63,8 +62,8 @@ public class DefaultOffHeapReadService implements OffHeapReadService, StringAcce
         return (ReadOffHeapMultiIndex) indexMap.get(index.getName());
     }
 
-    public void read(OffHeapRefs offHeapRef, DataConsumer consumer) {
-        ReadContext readContext = new ReadContext(this::get);
+    public int read(OffHeapRefs offHeapRef, DataConsumer consumer) {
+        ReadContext readContext = new ReadContext(this);
         final long[] offset = offHeapRef.offset().getOffset();
         final int size = offHeapRef.offset().size();
         final HandleAccess[] handleAccesses = offHeapTypeInfo.handleAccesses;
@@ -72,6 +71,7 @@ public class DefaultOffHeapReadService implements OffHeapReadService, StringAcce
         for (int i = 0; i < size; i++) {
             consumer.accept(readGlob(memorySegment, offset[i], readContext, handleAccesses, type));
         }
+        return size;
     }
 
     public void readAll(DataConsumer consumer) throws IOException {
@@ -127,6 +127,9 @@ public class DefaultOffHeapReadService implements OffHeapReadService, StringAcce
     }
 
     public Optional<Glob> read(OffHeapRef offHeapRef) {
+        if (offHeapRef == null || offHeapRef.index() == -1) {
+            return Optional.empty();
+        }
         ReadContext readContext = new ReadContext(this);
         final MutableGlob instantiate =
                 readGlob(memorySegment, offHeapRef.index(), readContext, offHeapTypeInfo.handleAccesses, offHeapTypeInfo.type);

@@ -41,7 +41,7 @@ public class DefaultOffHeapWriteService implements OffHeapWriteService {
     private final OffHeapTypeInfo offHeapTypeInfo;
     private final Map<String, Index> index;
 
-    public DefaultOffHeapWriteService(Path path, Arena arena, OffHeapTypeInfo offHeapTypeInfo, Map<String, Index> index) throws IOException {
+    public DefaultOffHeapWriteService(Path path, OffHeapTypeInfo offHeapTypeInfo, Map<String, Index> index) throws IOException {
         this.path = path;
         this.offHeapTypeInfo = offHeapTypeInfo;
         this.index = index;
@@ -67,11 +67,14 @@ public class DefaultOffHeapWriteService implements OffHeapWriteService {
     }
 
     private void computeUniqueIndex(Collection<Glob> globs, Map<String, Glob> allStrings, Field[] keyFields, FunctionalKeyBuilder functionalKeyBuilder, String indexName, IdentityHashMap<Glob, Long> offsetPerData) throws IOException {
-        TreeMap<FunctionalKey, Glob> indice = new TreeMap<>(new IndexFunctionalKeyComparator(allStrings,
-                keyFields));
+
+       //order keys
+        TreeMap<FunctionalKey, Glob> indice = new TreeMap<>(new IndexFunctionalKeyComparator(keyFields));
         for (Glob glob : globs) {
             final FunctionalKey functionalKey = functionalKeyBuilder.create(glob);
-            indice.put(functionalKey, glob);
+            if (indice.put(functionalKey, glob) != null) {
+                throw new RuntimeException("Duplicate key " + functionalKey + " for glob " + glob);
+            }
         }
 
         final Set<Map.Entry<FunctionalKey, Glob>> entries = indice.descendingMap().reversed().entrySet();
@@ -83,10 +86,17 @@ public class DefaultOffHeapWriteService implements OffHeapWriteService {
             ++i;
         }
 
+        // create a tree by splitting the sorted array for use in binary search
+        // the middle of the array is the root and will be the first elements in the index.
         Node1Elements root = Utils.split1Element(0, orderedData.length - 1);
+
+
+        // give the index of the element  to each elements
+        // with that we will know the offset of the left and right elements of each element.
         AtomicInteger nbElement = new AtomicInteger(0);
         scan(root, node1Elements -> node1Elements.order = nbElement.getAndIncrement());
 
+        // create the globType that represent an element :
         IndexTypeBuilder indexTypeBuilder = new IndexTypeBuilder(indexName, keyFields);
 
         List<Glob> indexGlobs = new ArrayList<>();
@@ -94,8 +104,9 @@ public class DefaultOffHeapWriteService implements OffHeapWriteService {
         final GlobSetIntAccessor dataLenOffset1Accessor = indexTypeBuilder.dataLenOffset1Accessor;
         final GlobSetIntAccessor offsetVal1Accessor = indexTypeBuilder.offsetVal1Accessor;
         final GlobSetIntAccessor offsetVal2Accessor = indexTypeBuilder.offsetVal2Accessor;
+        // scan all the element to create the globs to be saved.
         scan(root, new UniqueIndexNode1ElementsConsumer(indexTypeBuilder, orderedData, dataLenOffset1Accessor, dataOffset1Accessor, offsetPerData,
-                offsetVal1Accessor, offsetVal2Accessor, keyFields, allStrings, indexGlobs));
+                offsetVal1Accessor, offsetVal2Accessor, keyFields, indexGlobs));
 
         saveData(path.resolve(DefaultOffHeapService.getIndexNameFile(indexName)), indexTypeBuilder.offHeapIndexTypeInfo, indexGlobs, 1000, allStrings);
     }
@@ -104,8 +115,7 @@ public class DefaultOffHeapWriteService implements OffHeapWriteService {
 
     private void computeMultiIndex(Collection<Glob> globs, Map<String, Glob> allStrings, Field[] keyFields,
                                    FunctionalKeyBuilder functionalKeyBuilder, String indexName, IdentityHashMap<Glob, Long> offsetPerData) throws IOException {
-        TreeMap<FunctionalKey, List<Glob>> indice = new TreeMap<>(new IndexFunctionalKeyComparator(allStrings,
-                keyFields));
+        TreeMap<FunctionalKey, List<Glob>> indice = new TreeMap<>(new IndexFunctionalKeyComparator(keyFields));
         for (Glob glob : globs) {
             final FunctionalKey functionalKey = functionalKeyBuilder.create(glob);
             indice.compute(functionalKey, (functionalKey1, globs1) -> {
@@ -180,7 +190,7 @@ public class DefaultOffHeapWriteService implements OffHeapWriteService {
         final GlobSetIntAccessor offsetVal2Accessor = indexTypeBuilder.offsetVal2Accessor;
 
         scan(root, new MultiIndexNode1ElementsConsumer(indexTypeBuilder, offsetPerDataMap, dataLenOffset1Accessor, dataOffset1Accessor,
-                offsetVal1Accessor, offsetVal2Accessor, keyFields, allStrings, indexGlobs));
+                offsetVal1Accessor, offsetVal2Accessor, keyFields, indexGlobs));
 
         saveData(path.resolve(DefaultOffHeapService.getIndexNameFile(indexName)), indexTypeBuilder.offHeapIndexTypeInfo, indexGlobs, 1000, allStrings);
     }
@@ -226,9 +236,8 @@ public class DefaultOffHeapWriteService implements OffHeapWriteService {
         return allStrings;
     }
 
-    private static IdentityHashMap<Glob, Long> saveData(Path pathToFile, OffHeapTypeInfo offHeapTypeInfo1,
+    private static IdentityHashMap<Glob, Long> saveData(Path pathToFile, OffHeapTypeInfo offHeapTypeInfo,
                                                         Collection<Glob> globs, int bufferSize, Map<String, Glob> allStrings) throws IOException {
-
         final MemorySegment memorySegment;
         IdentityHashMap<Glob, Long> offsets = new IdentityHashMap<>();
         try (Arena arena = Arena.ofConfined()) {
@@ -251,16 +260,16 @@ public class DefaultOffHeapWriteService implements OffHeapWriteService {
                     }
                 });
 
-                final long groupSize = offHeapTypeInfo1.byteSizeWithPadding();
+                final long groupSize = offHeapTypeInfo.byteSizeWithPadding();
                 for (Glob glob : globs) {
-                    if (offHeapTypeInfo1.type != glob.getType()) {
-                        final String s = "Bad type " + offHeapTypeInfo1.type.getName() + " but got " + glob.getType().getName();
+                    if (offHeapTypeInfo.type != glob.getType()) {
+                        final String s = "Bad type " + offHeapTypeInfo.type.getName() + " but got " + glob.getType().getName();
                         logger.error(s);
                         throw new RemoteException(s);
                     }
                     final long offset = saveContext.freeOffset().globalFreeOffset;
                     offsets.put(glob, offset);
-                    saveGlob(offHeapTypeInfo1, bufferSize, glob, saveContext, groupSize, memorySegment);
+                    saveGlob(offHeapTypeInfo, bufferSize, glob, saveContext, groupSize, memorySegment);
                 }
                 saveContext.flush().flush();
             }
@@ -298,13 +307,12 @@ public class DefaultOffHeapWriteService implements OffHeapWriteService {
         private final GlobSetIntAccessor offsetVal1Accessor;
         private final GlobSetIntAccessor offsetVal2Accessor;
         private final Field[] keyFields;
-        private final Map<String, Glob> allStrings;
         private final List<Glob> indexGlobs;
 
         public UniqueIndexNode1ElementsConsumer(IndexTypeBuilder indexTypeBuilder, Map.Entry<FunctionalKey, Glob>[] orderedData,
                                                 GlobSetIntAccessor dataLenOffset1Accessor, GlobSetLongAccessor dataOffset1Accessor, IdentityHashMap<Glob, Long> offsetPerData,
                                                 GlobSetIntAccessor offsetVal1Accessor, GlobSetIntAccessor offsetVal2Accessor, Field[] keyFields,
-                                                Map<String, Glob> allStrings, List<Glob> indexGlobs) {
+                                                List<Glob> indexGlobs) {
             this.indexTypeBuilder = indexTypeBuilder;
             this.orderedData = orderedData;
             this.dataLenOffset1Accessor = dataLenOffset1Accessor;
@@ -313,7 +321,6 @@ public class DefaultOffHeapWriteService implements OffHeapWriteService {
             this.offsetVal1Accessor = offsetVal1Accessor;
             this.offsetVal2Accessor = offsetVal2Accessor;
             this.keyFields = keyFields;
-            this.allStrings = allStrings;
             this.indexGlobs = indexGlobs;
         }
 
@@ -327,14 +334,7 @@ public class DefaultOffHeapWriteService implements OffHeapWriteService {
             offsetVal1Accessor.setNative(index, node1Elements.val1 != null ? node1Elements.val1.order : -1);
             offsetVal2Accessor.setNative(index, node1Elements.val2 != null ? node1Elements.val2.order : -1);
             for (int j = 0; j < keyFields.length; j++) {
-                Field field = keyFields[j];
-                if (field instanceof StringField strField) {
-                    final Glob strDesc = allStrings.get(currentData.getKey().get(strField));
-                    index.set(indexTypeBuilder.strArr[j], strDesc != null ? strDesc.get(StringRefType.offset) : -1);
-                    index.set(indexTypeBuilder.strLen[j], strDesc != null ? strDesc.get(StringRefType.len) : -1);
-                } else {
-                    index.setValue(indexTypeBuilder.indexFields[j], currentData.getKey().getValue(field));
-                }
+                index.setValue(indexTypeBuilder.indexFields[j], currentData.getKey().getValue(keyFields[j]));
             }
             indexGlobs.add(index);
         }
@@ -348,7 +348,6 @@ public class DefaultOffHeapWriteService implements OffHeapWriteService {
         private final GlobSetIntAccessor offsetVal1Accessor;
         private final GlobSetIntAccessor offsetVal2Accessor;
         private final Field[] keyFields;
-        private final Map<String, Glob> allStrings;
         private final List<Glob> outIndexGlobs;
 
         public MultiIndexNode1ElementsConsumer(IndexTypeBuilder indexTypeBuilder,
@@ -358,7 +357,6 @@ public class DefaultOffHeapWriteService implements OffHeapWriteService {
                                                GlobSetIntAccessor offsetVal1Accessor,
                                                GlobSetIntAccessor offsetVal2Accessor,
                                                Field[] keyFields,
-                                               Map<String, Glob> allStrings,
                                                List<Glob> outIndexGlobs) {
             this.indexTypeBuilder = indexTypeBuilder;
             this.orderedDataToDataRefOrDataRef = orderedDataToDataRefOrDataRef;
@@ -367,7 +365,6 @@ public class DefaultOffHeapWriteService implements OffHeapWriteService {
             this.offsetVal1Accessor = offsetVal1Accessor;
             this.offsetVal2Accessor = offsetVal2Accessor;
             this.keyFields = keyFields;
-            this.allStrings = allStrings;
             this.outIndexGlobs = outIndexGlobs;
         }
 
@@ -380,14 +377,9 @@ public class DefaultOffHeapWriteService implements OffHeapWriteService {
             offsetVal1Accessor.setNative(index, node1Elements.val1 != null ? node1Elements.val1.order : -1);
             offsetVal2Accessor.setNative(index, node1Elements.val2 != null ? node1Elements.val2.order : -1);
             for (int j = 0; j < keyFields.length; j++) {
-                Field field = keyFields[j];
-                if (field instanceof StringField strField) {
-                    final Glob strDesc = allStrings.get(currentData.functionalKey().get(strField));
-                    index.set(indexTypeBuilder.strArr[j], strDesc != null ? strDesc.get(StringRefType.offset) : -1);
-                    index.set(indexTypeBuilder.strLen[j], strDesc != null ? strDesc.get(StringRefType.len) : -1);
-                } else {
-                    index.setValue(indexTypeBuilder.indexFields[j], currentData.functionalKey().getValue(field));
-                }
+                index.setValue(
+                        indexTypeBuilder.indexFields[j],
+                        currentData.functionalKey().getValue(keyFields[j]));
             }
             outIndexGlobs.add(index);
         }

@@ -5,7 +5,6 @@ import org.globsframework.core.model.Glob;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.function.Consumer;
 
 public interface OffHeapReadService extends AutoCloseable {
     ReadOffHeapUniqueIndex getIndex(OffHeapUniqueIndex index);
@@ -18,7 +17,7 @@ public interface OffHeapReadService extends AutoCloseable {
 
     Optional<Glob> read(OffHeapRef offHeapRef);
 
-    void read(OffHeapRefs offHeapRef, DataConsumer consumer);
+    int read(OffHeapRefs offHeapRef, DataConsumer consumer);
 
     interface DataConsumer {
         void accept(Glob glob);
