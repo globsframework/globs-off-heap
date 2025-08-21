@@ -3,8 +3,8 @@ package org.globsframework.shared.mem;
 import org.globsframework.core.functional.FunctionalKeyBuilder;
 import org.globsframework.core.functional.FunctionalKeyBuilderFactory;
 import org.globsframework.core.model.Glob;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;
@@ -45,22 +45,22 @@ public class SmallTest {
         readHeapService.readAll(new OffHeapReadService.DataConsumer() {
             @Override
             public void accept(Glob glob) {
-                Assert.fail("Should not be called");
+                Assertions.fail("Should not be called");
             }
         });
 
         final ReadOffHeapUniqueIndex index = readHeapService.getIndex(offHeapUniqueIndex);
         final OffHeapRef offHeapRef = index.find(uniqueFunctionalKeyBuilder.create().set(TestShared.DummyObject1.val2, 1).create());
-        Assert.assertNotNull(offHeapRef);
+        Assertions.assertNotNull(offHeapRef);
         final Optional<Glob> read = readHeapService.read(offHeapRef);
-        Assert.assertFalse(read.isPresent());
+        Assertions.assertFalse(read.isPresent());
 
         final ReadOffHeapMultiIndex multiIndex = readHeapService.getIndex(offHeapMultiIndex);
         final OffHeapRefs offHeapRefs = multiIndex.find(multiFunctionalKeyBuilder.create().set(TestShared.DummyObject1.name, "a name 1").create());
-        Assert.assertNotNull(offHeapRefs);
-        Assert.assertEquals(0, offHeapRefs.size());
+        Assertions.assertNotNull(offHeapRefs);
+        Assertions.assertEquals(0, offHeapRefs.size());
         readHeapService.read(offHeapRefs, glob -> {
-            Assert.fail("Should not be called");
+            Assertions.fail("Should not be called");
         });
     }
 }

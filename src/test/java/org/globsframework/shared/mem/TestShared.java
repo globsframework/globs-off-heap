@@ -13,8 +13,8 @@ import org.globsframework.core.metamodel.annotations.MaxSize_;
 import org.globsframework.core.metamodel.fields.*;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;
@@ -168,8 +168,8 @@ public class TestShared {
 
         List<Glob> readData = new ArrayList<>();
         readHeapService.readAll(glob -> readData.add(glob));
-        Assert.assertEquals(3, globs.size());
-        Assert.assertEquals("\u63FF\uAF341", globs.get(0).get(DummyObject1.fixSizeStrNoTruncate));
+        Assertions.assertEquals(3, globs.size());
+        Assertions.assertEquals("\u63FF\uAF341", globs.get(0).get(DummyObject1.fixSizeStrNoTruncate));
         final ReadOffHeapUniqueIndex index = readHeapService.getIndex(offHeapUniqueIndex);
 
         check(index, uniqueFunctionalKeyBuilder, readHeapService, 1);
@@ -179,9 +179,9 @@ public class TestShared {
 
     private static void check(ReadOffHeapUniqueIndex index, FunctionalKeyBuilder uniqueFunctionalKeyBuilder, OffHeapReadService readHeapService, int pos) {
         final OffHeapRef offHeapRef = index.find(uniqueFunctionalKeyBuilder.create().set(DummyObject1.fixSizeStrNoTruncate, "\u63FF\uAF34" + pos).getShared());
-        Assert.assertNotNull(offHeapRef);
+        Assertions.assertNotNull(offHeapRef);
         final Glob read = readHeapService.read(offHeapRef).get();
-        Assert.assertEquals(pos, read.get(DummyObject1.val1).intValue());
+        Assertions.assertEquals(pos, read.get(DummyObject1.val1).intValue());
     }
 
     private static void getMultiIndex(OffHeapReadService readHeapService, OffHeapNotUniqueIndex offHeapMultiIndex, int loop, FunctionalKey[] functionalKeys) {
@@ -192,10 +192,10 @@ public class TestShared {
             {
                 for (FunctionalKey functionalKey : functionalKeys) {
                     final OffHeapRefs offHeapRefs = readOffHeapMultiIndex.find(functionalKey);
-                    Assert.assertNotNull(functionalKey.toString(), offHeapRefs);
+                    Assertions.assertNotNull(offHeapRefs, functionalKey.toString());
                     AtomicInteger count = new AtomicInteger();
-                    Assert.assertEquals(SIZE / MODULO, readHeapService.read(offHeapRefs, _ -> count.incrementAndGet()));
-                    Assert.assertEquals(SIZE / MODULO, count.get());
+                    Assertions.assertEquals(SIZE / MODULO, readHeapService.read(offHeapRefs, _ -> count.incrementAndGet()));
+                    Assertions.assertEquals(SIZE / MODULO, count.get());
                     readOffHeapMultiIndex.free(offHeapRefs);
                 }
             }
@@ -211,13 +211,13 @@ public class TestShared {
             for (FunctionalKey functionalKey : functionalKeys) {
                 ReadOffHeapUniqueIndex readOffHeapIndex = readHeapService.getIndex(offHeapUniqueIndex);
                 OffHeapRef offHeapRef = readOffHeapIndex.find(functionalKey);
-                Assert.assertNotNull(functionalKey.toString(), offHeapRef);
-                Assert.assertTrue(functionalKey.toString(), offHeapRef.index() != -1);
+                Assertions.assertNotNull(offHeapRef, functionalKey.toString());
+                Assertions.assertTrue(offHeapRef.index() != -1, functionalKey.toString());
                 Optional<Glob> data = readHeapService.read(offHeapRef);
-                Assert.assertTrue(data.isPresent());
+                Assertions.assertTrue(data.isPresent());
                 final Glob glob = data.get();
-                Assert.assertEquals("at " + i, 10 + (glob.get(DummyObject1.val1)) % 100, glob.get(DummyObject1.maxValue).intValue());
-                Assert.assertEquals( "a name " + ((glob.get(DummyObject1.val1)) % MODULO), glob.get(DummyObject1.name));
+                Assertions.assertEquals(10 + (glob.get(DummyObject1.val1)) % 100, glob.get(DummyObject1.maxValue).intValue(), "at " + i);
+                Assertions.assertEquals( "a name " + ((glob.get(DummyObject1.val1)) % MODULO), glob.get(DummyObject1.name));
             }
         }
         long endIndex = System.nanoTime();
@@ -233,10 +233,10 @@ public class TestShared {
         }, Set.of(DummyObject1.val1, DummyObject1.data1));
         System.out.println("Read " + (System.currentTimeMillis() - startRead) + " ms");
 
-        Assert.assertEquals(globs.size(), received.size());
+        Assertions.assertEquals(globs.size(), received.size());
         final Glob glob = received.get(0);
         final Integer val1 = glob.get(DummyObject1.val1);
-        Assert.assertEquals(10 + val1 % 100, glob.get(DummyObject1.data1).longValue());
+        Assertions.assertEquals(10 + val1 % 100, glob.get(DummyObject1.data1).longValue());
     }
 
     private static void loopRead(OffHeapReadService readHeapService, List<Glob> globs) throws IOException {
@@ -247,10 +247,10 @@ public class TestShared {
         });
         System.out.println("Read " + (System.currentTimeMillis() - startRead) + " ms");
 
-        Assert.assertEquals(globs.size(), received.size());
+        Assertions.assertEquals(globs.size(), received.size());
         final Glob glob = received.get(0);
         final Integer i1 = glob.get(DummyObject1.val1);
-        Assert.assertArrayEquals(new int[]{i1, i1 + 1, i1 + 2}, glob.get(DummyObject1.data));
+        Assertions.assertArrayEquals(new int[]{i1, i1 + 1, i1 + 2}, glob.get(DummyObject1.data));
     }
 
 

@@ -1,11 +1,14 @@
 package org.globsframework.shared.mem.impl.field.dataaccess;
 
-import junit.framework.TestCase;
+import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
 
-public class DateDataAccessTest extends TestCase {
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+public class DateDataAccessTest {
+
+    @Test
     public void testDate() {
         assertEquals(0, DateDataAccess.compareDate(LocalDate.of(1000, 2, 2),
                 DateDataAccess.toLong(1000, 2, 2)));
@@ -27,7 +30,5 @@ public class DateDataAccessTest extends TestCase {
 
         assertEquals(0, DateDataAccess.compareDate(LocalDate.of(-1000, 2, 2),
                 DateDataAccess.toLong(-1000, 2, 2)));
-
-
     }
 }
