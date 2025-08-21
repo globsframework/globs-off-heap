@@ -13,7 +13,6 @@ import java.lang.foreign.MemorySegment;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.Optional;
 
 public class DefaultReadOffHeapUniqueIndex implements ReadOffHeapUniqueIndex, ReadIndex, AutoCloseable {
     private final OffHeapUniqueIndex offHeapIndex;
@@ -21,6 +20,7 @@ public class DefaultReadOffHeapUniqueIndex implements ReadOffHeapUniqueIndex, Re
     private final FileChannel indexChannel;
     private final MemorySegment memorySegment;
     private final IndexTypeBuilder indexTypeBuilder;
+    private final boolean isEmpty;
 
     public DefaultReadOffHeapUniqueIndex(Path path, OffHeapUniqueIndex offHeapIndex, StringAccessorByAddress stringAccessor) throws IOException {
         this.offHeapIndex = offHeapIndex;
@@ -28,10 +28,15 @@ public class DefaultReadOffHeapUniqueIndex implements ReadOffHeapUniqueIndex, Re
         final String indexName = offHeapIndex.getName();
         indexTypeBuilder = new IndexTypeBuilder(indexName, offHeapIndex.getKeyBuilder().getFields());
         this.indexChannel = FileChannel.open(path.resolve(DefaultOffHeapService.getIndexNameFile(indexName)), StandardOpenOption.READ);
-        memorySegment = indexChannel.map(FileChannel.MapMode.READ_ONLY, 0, indexChannel.size(), Arena.ofShared());
+        final long size = indexChannel.size();
+        isEmpty = size == 0;
+        memorySegment = indexChannel.map(FileChannel.MapMode.READ_ONLY, 0, size, Arena.ofShared());
     }
 
     public OffHeapRef find(FunctionalKey functionalKey) {
+        if (isEmpty) {
+            return OffHeapRef.NULL;
+        }
         return binSearch(functionalKey, 0);
     }
 
