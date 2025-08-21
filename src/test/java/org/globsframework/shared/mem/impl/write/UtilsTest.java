@@ -1,14 +1,15 @@
 package org.globsframework.shared.mem.impl.write;
 
-import junit.framework.TestCase;
-import org.junit.Assert;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.IntStream;
 
-public class UtilsTest extends TestCase {
+public class UtilsTest {
 
+    @Test
     public void testSplit1Element() {
         for (int i = 0; i < 10000; i++) {
             check1Element(0, i);
@@ -17,6 +18,7 @@ public class UtilsTest extends TestCase {
         }
     }
 
+    @Test
     public void testSplit3Element() {
         for (int i = 0; i < 10000; i++) {
             check3Element(0, i);
@@ -30,7 +32,7 @@ public class UtilsTest extends TestCase {
         Set<Integer> indices = new HashSet<>();
         scan(split, indices);
         IntStream.range(from, to).forEach(i -> {
-            Assert.assertTrue(indices.contains(i));
+            Assertions.assertTrue(indices.contains(i));
         });
     }
 
@@ -39,7 +41,7 @@ public class UtilsTest extends TestCase {
         Set<Integer> indices = new HashSet<>();
         scan(split, indices);
         IntStream.range(from, to).forEach(i -> {
-            Assert.assertTrue(indices.contains(i));
+            Assertions.assertTrue(indices.contains(i));
         });
     }
 
@@ -48,13 +50,13 @@ public class UtilsTest extends TestCase {
             return;
         }
         if (split.indice1 != -1) {
-            Assert.assertTrue("" + split.indice1, indices.add(split.indice1));
+            Assertions.assertTrue(indices.add(split.indice1), "" + split.indice1);
         }
         if (split.indice2 != -1) {
-            Assert.assertTrue("" + split.indice2, indices.add(split.indice2));
+            Assertions.assertTrue(indices.add(split.indice2), "" + split.indice2);
         }
         if (split.indice3 != -1) {
-            Assert.assertTrue("" + split.indice3, indices.add(split.indice3));
+            Assertions.assertTrue(indices.add(split.indice3), "" + split.indice3);
         }
         scan(split.val1, indices);
         scan(split.val2, indices);
@@ -67,7 +69,7 @@ public class UtilsTest extends TestCase {
             return;
         }
         if (split.indice1 != -1) {
-            Assert.assertTrue("" + split.indice1, indices.add(split.indice1));
+            Assertions.assertTrue(indices.add(split.indice1), "" + split.indice1);
         }
         scan(split.val1, indices);
         scan(split.val2, indices);
