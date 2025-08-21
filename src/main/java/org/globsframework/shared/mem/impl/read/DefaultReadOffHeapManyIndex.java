@@ -31,6 +31,7 @@ public class DefaultReadOffHeapManyIndex implements ReadOffHeapMultiIndex, ReadI
     private final MemorySegment dataRefMemorySegment;
     private final IndexTypeBuilder indexTypeBuilder;
     private final LongArray[] arrayCaches = new LongArray[4];
+    private final boolean isEmpty;
     private int firstFreeLongArrayCache = -1;
 
     public DefaultReadOffHeapManyIndex(Path path, OffHeapNotUniqueIndex offHeapIndex, StringAccessorByAddress stringAccessor) throws IOException {
@@ -39,12 +40,16 @@ public class DefaultReadOffHeapManyIndex implements ReadOffHeapMultiIndex, ReadI
         final String indexName = offHeapIndex.getName();
         indexTypeBuilder = new IndexTypeBuilder(indexName, offHeapIndex.getKeyBuilder().getFields());
         this.indexChannel = FileChannel.open(path.resolve(DefaultOffHeapService.getIndexNameFile(indexName)), StandardOpenOption.READ);
+        isEmpty = indexChannel.size() == 0;
         this.indexDataRefChannel = FileChannel.open(path.resolve(DefaultOffHeapService.getIndexDataNameFile(indexName)), StandardOpenOption.READ);
         memorySegment = indexChannel.map(FileChannel.MapMode.READ_ONLY, 0, indexChannel.size(), Arena.ofShared());
         dataRefMemorySegment = indexDataRefChannel.map(FileChannel.MapMode.READ_ONLY, 0, indexDataRefChannel.size(), Arena.ofShared());
     }
 
     public OffHeapRefs find(FunctionalKey functionalKey) {
+        if (isEmpty) {
+            return OffHeapRefs.NULL;
+        }
         return binSearch(functionalKey, 0);
     }
 
