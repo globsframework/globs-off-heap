@@ -1,6 +1,7 @@
 package org.globsframework.shared.mem.impl.field.dataaccess;
 
 import org.globsframework.core.metamodel.fields.DateField;
+import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.model.FieldValues;
 import org.globsframework.shared.mem.impl.StringAccessorByAddress;
 
@@ -17,6 +18,11 @@ public class DateDataAccess implements DataAccess {
     public DateDataAccess(DateField field, VarHandle varHandle) {
         this.field = field;
         this.varHandle = varHandle;
+    }
+
+    @Override
+    public Field getField() {
+        return field;
     }
 
     @Override

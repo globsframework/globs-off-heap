@@ -24,6 +24,11 @@ public class AnyDataAccess implements DataAccess {
     }
 
     @Override
+    public Field getField() {
+        return field;
+    }
+
+    @Override
     public int compare(FieldValues functionalKey, MemorySegment memorySegment, long index, StringAccessorByAddress stringAccessorByAddress) {
         return Utils.compare((Comparable<Object>)functionalKey.getValue(field), get(memorySegment, index, stringAccessorByAddress));
     }

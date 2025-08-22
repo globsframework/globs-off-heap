@@ -114,6 +114,10 @@ public class DefaultReadOffHeapManyIndex implements ReadOffHeapMultiIndex, ReadI
         DataAccess[] handleAccesses = indexTypeBuilder.dataAccesses;
         for (int i = 0; i < handleAccesses.length; i++) {
             DataAccess handleAccess = handleAccesses[i];
+            if (!functionalKey.isSet(handleAccess.getField())) {
+                throw new IllegalArgumentException("FunctionalKey must contain all fields of the index: "
+                                                   + offHeapIndex.getName() + " " + functionalKey + " for field " + handleAccess.getField());
+            }
             int cmp = handleAccess.compare(functionalKey, memorySegment, index, stringAccessor);
             if (cmp != 0) {
                 return cmp;

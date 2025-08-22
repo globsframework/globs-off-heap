@@ -2,6 +2,7 @@ package org.globsframework.shared.mem.impl.field.dataaccess;
 
 import org.globsframework.core.metamodel.fields.BooleanField;
 import org.globsframework.core.metamodel.fields.DoubleField;
+import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.model.FieldValues;
 import org.globsframework.shared.mem.impl.StringAccessorByAddress;
 
@@ -17,6 +18,11 @@ public class BooleanDataAccess implements DataAccess {
     public BooleanDataAccess(BooleanField field, VarHandle varHandle) {
         this.field = field;
         this.varHandle = varHandle;
+    }
+
+    @Override
+    public Field getField() {
+        return field;
     }
 
     @Override
