@@ -1,5 +1,6 @@
 package org.globsframework.shared.mem.impl.field.dataaccess;
 
+import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.metamodel.fields.LongField;
 import org.globsframework.core.model.FieldValues;
 import org.globsframework.shared.mem.impl.StringAccessorByAddress;
@@ -16,6 +17,11 @@ public class LongDataAccess implements DataAccess {
     public LongDataAccess(LongField field, VarHandle varHandle) {
         this.field = field;
         this.varHandle = varHandle;
+    }
+
+    @Override
+    public Field getField() {
+        return field;
     }
 
     @Override

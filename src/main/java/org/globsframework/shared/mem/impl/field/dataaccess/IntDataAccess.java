@@ -1,5 +1,6 @@
 package org.globsframework.shared.mem.impl.field.dataaccess;
 
+import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.metamodel.fields.IntegerField;
 import org.globsframework.core.model.FieldValues;
 import org.globsframework.shared.mem.impl.StringAccessorByAddress;
@@ -16,6 +17,11 @@ public class IntDataAccess implements DataAccess {
     public IntDataAccess(IntegerField field, VarHandle varHandle) {
         this.field = field;
         this.varHandle = varHandle;
+    }
+
+    @Override
+    public Field getField() {
+        return field;
     }
 
     @Override

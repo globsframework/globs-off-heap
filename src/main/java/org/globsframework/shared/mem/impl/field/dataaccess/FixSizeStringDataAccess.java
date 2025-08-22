@@ -1,5 +1,6 @@
 package org.globsframework.shared.mem.impl.field.dataaccess;
 
+import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.metamodel.fields.StringField;
 import org.globsframework.core.model.FieldValues;
 import org.globsframework.shared.mem.impl.DefaultOffHeapService;
@@ -29,6 +30,11 @@ public class FixSizeStringDataAccess implements DataAccess {
                         MemoryLayout.PathElement.sequenceElement()));
     }
 
+
+    @Override
+    public Field getField() {
+        return field;
+    }
 
     @Override
     public int compare(FieldValues functionalKey, MemorySegment memorySegment, long index, StringAccessorByAddress stringAccessorByAddress) {

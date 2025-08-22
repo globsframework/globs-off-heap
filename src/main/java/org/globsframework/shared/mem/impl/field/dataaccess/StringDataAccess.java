@@ -1,5 +1,6 @@
 package org.globsframework.shared.mem.impl.field.dataaccess;
 
+import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.metamodel.fields.StringField;
 import org.globsframework.core.model.FieldValues;
 import org.globsframework.core.utils.Utils;
@@ -32,6 +33,11 @@ public class StringDataAccess implements DataAccess {
         int len = (int) varLenHandle.get(memorySegment, 0L, offset);
         int addr = (int) varAddrHandle.get(memorySegment, 0L, offset);
         return stringAccessorByAddress.get(addr, len);
+    }
+
+    @Override
+    public Field getField() {
+        return field;
     }
 
     @Override
