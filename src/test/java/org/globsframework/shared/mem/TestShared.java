@@ -26,7 +26,6 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class TestShared {
 //    public static final int SIZE = 10_000_000;
@@ -193,9 +192,12 @@ public class TestShared {
                 for (FunctionalKey functionalKey : functionalKeys) {
                     final OffHeapRefs offHeapRefs = readOffHeapMultiIndex.find(functionalKey);
                     Assertions.assertNotNull(offHeapRefs, functionalKey.toString());
-                    AtomicInteger count = new AtomicInteger();
-                    Assertions.assertEquals(SIZE / MODULO, readHeapService.read(offHeapRefs, _ -> count.incrementAndGet()));
-                    Assertions.assertEquals(SIZE / MODULO, count.get());
+                    Map<Glob, Glob> data = new IdentityHashMap<>();
+                    Assertions.assertEquals(SIZE / MODULO, readHeapService.read(offHeapRefs, g -> data.put(g, g)));
+                    Assertions.assertEquals(SIZE / MODULO, data.size());
+                    for (Glob value : data.values()) {
+                        Assertions.assertEquals(functionalKey.get(DummyObject1.name), value.get(DummyObject1.name));
+                    }
                     readOffHeapMultiIndex.free(offHeapRefs);
                 }
             }

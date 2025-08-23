@@ -163,9 +163,9 @@ public class DefaultOffHeapWriteService implements OffHeapWriteService {
                         for (Glob glob : value) {
                             final Long index = offsetPerData.get(glob);
                             varHandle.set(memorySegment, localOffset, index);
+                            localOffset += 8;
                         }
                         globalOffset += value.size() * 8L;
-                        localOffset +=  value.size() * 8L;
                     } else {
                         offsetPerDataMap[j] = new FunctionalKeyAndDataRef(orderedDatum.getKey(), offsetPerData.get(value.getFirst()), value.size());
                     }
