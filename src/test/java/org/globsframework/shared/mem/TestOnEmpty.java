@@ -13,7 +13,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 
-public class SmallTest {
+public class TestOnEmpty {
     @Test
     public void testFindOnEmpty() throws IOException {
         final FunctionalKeyBuilder uniqueFunctionalKeyBuilder =

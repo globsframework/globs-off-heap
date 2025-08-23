@@ -13,6 +13,9 @@ import java.lang.foreign.MemorySegment;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.List;
+
+import static org.globsframework.shared.mem.impl.read.DefaultReadOffHeapManyIndex.getLastIndex;
 
 public class DefaultReadOffHeapUniqueIndex implements ReadOffHeapUniqueIndex, ReadIndex, AutoCloseable {
     private final OffHeapUniqueIndex offHeapIndex;
@@ -39,6 +42,102 @@ public class DefaultReadOffHeapUniqueIndex implements ReadOffHeapUniqueIndex, Re
         }
         return binSearch(functionalKey, 0);
     }
+
+    public OffHeapRefs search(FunctionalKey functionalKey) {
+        DataAccess[] handleAccesses = indexTypeBuilder.dataAccesses;
+        final int lastIndex = getLastIndex(functionalKey, handleAccesses);
+        DefaultReadOffHeapManyIndex.Filter filter = null;
+        if (lastIndex < handleAccesses.length) {
+            for (int j = lastIndex; j < handleAccesses.length; j++) {
+                if (functionalKey.contains(handleAccesses[j].getField()) && functionalKey.isSet(handleAccesses[j].getField())) {
+                    DefaultReadOffHeapManyIndex.DataAccessFilter dataAccessFilter = new DefaultReadOffHeapManyIndex.DataAccessFilter(handleAccesses[j]);
+                    filter = filter == null ? dataAccessFilter : filter.and(dataAccessFilter);
+                }
+            }
+            if (filter == null) {
+                filter = (functionalKey1, memorySegment1, index, stringAccessor1) -> true;
+            }
+        } else {
+            filter = (functionalKey1, memorySegment1, index, stringAccessor1) -> true;
+        }
+        // scan all with filter.
+        List<Long> list = new java.util.ArrayList<>();
+        binSearch(functionalKey, 0, lastIndex, filter, list::add, DefaultReadOffHeapManyIndex.EqualAt.BOTH);
+        final long[] index = list.stream().mapToLong(l -> l).toArray();
+        return new OffHeapRefs(new LongArray(index));
+    }
+
+    private int compare(FunctionalKey functionalKey, long index, int maxDepth) {
+        DataAccess[] handleAccesses = indexTypeBuilder.dataAccesses;
+        for (int i = 0; i < maxDepth; i++) {
+            DataAccess handleAccess = handleAccesses[i];
+            if (!functionalKey.contains(handleAccess.getField()) || !functionalKey.isSet(handleAccess.getField())) {
+                throw new IllegalArgumentException("FunctionalKey must contain all fields of the index: "
+                                                   + offHeapIndex.getName() + " " + functionalKey + " for field " + handleAccess.getField());
+            }
+            int cmp = handleAccess.compare(functionalKey, memorySegment, index, stringAccessor);
+            if (cmp != 0) {
+                return cmp;
+            }
+        }
+        return 0;
+    }
+
+    private void binSearch(FunctionalKey functionalKey, long indexOffset, int maxDepth, DefaultReadOffHeapManyIndex.Filter filter, DefaultReadOffHeapManyIndex.DataIndex dataIndex, DefaultReadOffHeapManyIndex.EqualAt equalAt) {
+        int compare = compare(functionalKey, indexOffset, maxDepth);
+        if (compare == 0) {
+            if (filter.accept(functionalKey, memorySegment, indexOffset, stringAccessor)) {
+                final long dataOffset = (long) indexTypeBuilder.dataOffsetArrayHandle.get(memorySegment, 0L, indexOffset);
+                dataIndex.accept(dataOffset);
+            }
+            {
+                int index = (int) indexTypeBuilder.indexOffset1ArrayHandle.get(memorySegment, 0L, indexOffset);
+                if (index != -1) {
+                    binSearch(functionalKey, index, maxDepth, filter, dataIndex, DefaultReadOffHeapManyIndex.EqualAt.RIGHT);
+                }
+            }
+            {
+                int index = (int) indexTypeBuilder.indexOffset2ArrayHandle.get(memorySegment, 0L, indexOffset);
+                if (index != -1) {
+                    binSearch(functionalKey, index, maxDepth, filter, dataIndex, DefaultReadOffHeapManyIndex.EqualAt.LEFT);
+                }
+            }
+        } else {
+            if (equalAt == DefaultReadOffHeapManyIndex.EqualAt.LEFT) {
+                if (compare < 0) {
+                    int index = (int) indexTypeBuilder.indexOffset1ArrayHandle.get(memorySegment, 0L, indexOffset);
+                    if (index >= 0) {
+                        binSearch(functionalKey, index, maxDepth, filter, dataIndex, DefaultReadOffHeapManyIndex.EqualAt.BOTH);
+                    }
+                }
+                else {
+                    return;
+                }
+            } else if (equalAt == DefaultReadOffHeapManyIndex.EqualAt.RIGHT) {
+                if (compare > 0) {
+                    int index = (int) indexTypeBuilder.indexOffset2ArrayHandle.get(memorySegment, 0L, indexOffset);
+                    if (index >= 0) {
+                        binSearch(functionalKey, index, maxDepth, filter, dataIndex, DefaultReadOffHeapManyIndex.EqualAt.BOTH);
+                    }
+                } else {
+                    return;
+                }
+            } else if (equalAt == DefaultReadOffHeapManyIndex.EqualAt.BOTH) {
+                if (compare > 0) {
+                    int index = (int) indexTypeBuilder.indexOffset2ArrayHandle.get(memorySegment, 0L, indexOffset);
+                    if (index >= 0) {
+                        binSearch(functionalKey, index, maxDepth, filter, dataIndex, equalAt);
+                    }
+                } else {
+                    int index = (int) indexTypeBuilder.indexOffset1ArrayHandle.get(memorySegment, 0L, indexOffset);
+                    if (index >= 0) {
+                        binSearch(functionalKey, index, maxDepth, filter, dataIndex, equalAt);
+                    }
+                }
+            }
+        }
+    }
+
 
     private OffHeapRef binSearch(FunctionalKey functionalKey, long indexOffset) {
         int compare = compare(functionalKey, indexOffset);
