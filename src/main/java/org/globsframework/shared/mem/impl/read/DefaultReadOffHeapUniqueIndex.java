@@ -10,6 +10,7 @@ import org.globsframework.shared.mem.impl.field.dataaccess.DataAccess;
 import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
+import java.lang.invoke.VarHandle;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -40,7 +41,8 @@ public class DefaultReadOffHeapUniqueIndex implements ReadOffHeapUniqueIndex, Re
         if (isEmpty) {
             return OffHeapRef.NULL;
         }
-        return binSearch(functionalKey, 0);
+        checkKey(functionalKey, indexTypeBuilder.dataAccesses);
+        return binSearch(functionalKey);
     }
 
     public OffHeapRefs search(FunctionalKey functionalKey) {
@@ -83,7 +85,8 @@ public class DefaultReadOffHeapUniqueIndex implements ReadOffHeapUniqueIndex, Re
         return 0;
     }
 
-    private void binSearch(FunctionalKey functionalKey, long indexOffset, int maxDepth, DefaultReadOffHeapManyIndex.Filter filter, DefaultReadOffHeapManyIndex.DataIndex dataIndex, DefaultReadOffHeapManyIndex.EqualAt equalAt) {
+    private void binSearch(FunctionalKey functionalKey, long indexOffset, int maxDepth, DefaultReadOffHeapManyIndex.Filter filter,
+                           DefaultReadOffHeapManyIndex.DataIndex dataIndex, DefaultReadOffHeapManyIndex.EqualAt equalAt) {
         int compare = compare(functionalKey, indexOffset, maxDepth);
         if (compare == 0) {
             if (filter.accept(functionalKey, memorySegment, indexOffset, stringAccessor)) {
@@ -139,37 +142,50 @@ public class DefaultReadOffHeapUniqueIndex implements ReadOffHeapUniqueIndex, Re
     }
 
 
-    private OffHeapRef binSearch(FunctionalKey functionalKey, long indexOffset) {
-        int compare = compare(functionalKey, indexOffset);
-        if (compare == 0) {
-            return new OffHeapRef((long) indexTypeBuilder.dataOffsetArrayHandle.get(memorySegment, 0L, indexOffset));
-        }
-        if (compare < 0) {
-            int index = (int) indexTypeBuilder.indexOffset1ArrayHandle.get(memorySegment, 0L, indexOffset);
-            if (index >= 0) {
-                return binSearch(functionalKey, index);
-            } else {
-                return OffHeapRef.NULL;
+    private OffHeapRef binSearch(FunctionalKey functionalKey) {
+        final VarHandle dataOffsetArrayHandle = indexTypeBuilder.dataOffsetArrayHandle;
+        final VarHandle indexOffset1ArrayHandle = indexTypeBuilder.indexOffset1ArrayHandle;
+        final VarHandle indexOffset2ArrayHandle = indexTypeBuilder.indexOffset2ArrayHandle;
+        final MemorySegment memSeg = memorySegment;
+        final DataAccess[] dataAccesses = indexTypeBuilder.dataAccesses;
+        final StringAccessorByAddress stringAccessor = this.stringAccessor;
+        long indexOffset = 0;
+        while (true) {
+            int compare = compare(functionalKey, indexOffset, dataAccesses, memSeg, stringAccessor);
+            if (compare == 0) {
+                return new OffHeapRef((long) dataOffsetArrayHandle.get(memSeg, 0L, indexOffset));
             }
-        } else {
-            int index = (int) indexTypeBuilder.indexOffset2ArrayHandle.get(memorySegment, 0L, indexOffset);
-            if (index >= 0) {
-                return binSearch(functionalKey, index);
+            if (compare < 0) {
+                int index = (int) indexOffset1ArrayHandle.get(memSeg, 0L, indexOffset);
+                if (index >= 0) {
+                    indexOffset = index;
+                } else {
+                    return OffHeapRef.NULL;
+                }
             } else {
-                return OffHeapRef.NULL;
+                int index = (int) indexOffset2ArrayHandle.get(memSeg, 0L, indexOffset);
+                if (index >= 0) {
+                    indexOffset = index;
+                } else {
+                    return OffHeapRef.NULL;
+                }
             }
         }
     }
 
-    private int compare(FunctionalKey functionalKey, long index) {
-        DataAccess[] handleAccesses = indexTypeBuilder.dataAccesses;
-        for (int i = 0; i < handleAccesses.length; i++) {
-            DataAccess handleAccess = handleAccesses[i];
+    private void checkKey(FunctionalKey functionalKey, DataAccess[] handleAccesses) {
+        for (DataAccess handleAccess : handleAccesses) {
             if (!functionalKey.isSet(handleAccess.getField())) {
                 throw new IllegalArgumentException("FunctionalKey must contain all fields of the index: "
                                                    + offHeapIndex.getName() + " " + functionalKey + " for field " + handleAccess.getField());
             }
-            int cmp = handleAccess.compare(functionalKey, memorySegment, index, stringAccessor);
+        }
+    }
+
+    private static int compare(FunctionalKey functionalKey, long index,
+                        DataAccess[] handleAccesses, MemorySegment memSeg, StringAccessorByAddress stringAccessor) {
+        for (int i = 0; i < handleAccesses.length; i++) {
+            int cmp = handleAccesses[i].compare(functionalKey, memSeg, index, stringAccessor);
             if (cmp != 0) {
                 return cmp;
             }

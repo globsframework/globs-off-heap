@@ -119,7 +119,7 @@ public class TestShared {
         }
     }
 
-    private static MutableGlob createData(int i, LocalDate localDate) {
+    public static MutableGlob createData(int i, LocalDate localDate) {
         return DummyObject1.TYPE.instantiate()
                 .set(DummyObject1.val1, i)
                 .set(DummyObject1.val2, (i % MODULO))
