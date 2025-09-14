@@ -51,7 +51,7 @@ public class IndexTypeBuilder {
         dataLenOffset1Accessor = indexType.getGlobFactory().getSetAccessor(dataLenOffset1);
         offsetVal1Accessor = indexType.getGlobFactory().getSetAccessor(offsetVal1);
         offsetVal2Accessor = indexType.getGlobFactory().getSetAccessor(offsetVal2);
-        offHeapIndexTypeInfo = new OffHeapTypeInfo(indexType);
+        offHeapIndexTypeInfo = OffHeapTypeInfo.create(indexType, OffHeapGlobTypeGroupLayoutImpl.create(indexType));
         final GroupLayout groupLayout = offHeapIndexTypeInfo.groupLayout;
 
         for (int i = 0; i < keyFields.length; i++) {

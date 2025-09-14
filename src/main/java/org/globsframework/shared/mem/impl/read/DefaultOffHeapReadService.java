@@ -15,6 +15,7 @@ import java.lang.foreign.MemorySegment;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.*;
@@ -30,28 +31,56 @@ public class DefaultOffHeapReadService implements OffHeapReadService, StringAcce
     private final Map<String, ReadIndex> indexMap;
     private final MemorySegment memorySegment;
     private final long dataSize;
+    private final Map<GlobType, SegmentPerGlobType> perGlobTypeMap = new HashMap<>();
     private byte[] cache = new byte[1024];
 
-    public DefaultOffHeapReadService(Path directory, Arena arena, OffHeapTypeInfo offHeapTypeInfo, Map<String, Index> index) throws IOException {
+    public DefaultOffHeapReadService(Path directory, Arena arena, GlobType mainDataType, Map<GlobType, OffHeapTypeInfo> offHeapTypeInfoMap,
+                                     Set<GlobType> typesToSave, Map<String, Index> index) throws IOException {
         this.arena = arena;
-        this.dataChannel = FileChannel.open(directory.resolve(DefaultOffHeapService.CONTENT_DATA), StandardOpenOption.READ);
-        this.stringChannel = FileChannel.open(directory.resolve(DefaultOffHeapService.STRINGS_DATA), StandardOpenOption.READ);
-        stringBytesBuffer = stringChannel.map(FileChannel.MapMode.READ_ONLY, 0, stringChannel.size());
-        this.count = Math.toIntExact(dataChannel.size() / offHeapTypeInfo.byteSizeWithPadding());
-        this.offHeapTypeInfo = offHeapTypeInfo;
-        indexMap = new HashMap<>();
+        this.indexMap = new HashMap<>();
         for (Map.Entry<String, Index> entry : index.entrySet()) {
             if (entry.getValue().isUnique()) {
                 indexMap.put(entry.getKey(), new DefaultReadOffHeapUniqueIndex(directory, (OffHeapUniqueIndex) entry.getValue(), this));
             }else {
                 indexMap.put(entry.getKey(), new DefaultReadOffHeapManyIndex(directory, (OffHeapNotUniqueIndex) entry.getValue(), this));
             }
-
         }
+        this.stringChannel = FileChannel.open(directory.resolve(DefaultOffHeapService.STRINGS_DATA), StandardOpenOption.READ);
+        this.stringBytesBuffer = stringChannel.map(FileChannel.MapMode.READ_ONLY, 0, stringChannel.size());
+
+        this.offHeapTypeInfo = offHeapTypeInfoMap.get(mainDataType);
+        this.dataChannel = FileChannel.open(directory.resolve(DefaultOffHeapService.createContentFileName(mainDataType)), StandardOpenOption.READ);
+        this.count = Math.toIntExact(dataChannel.size() / offHeapTypeInfo.byteSizeWithPadding());
         memorySegment = dataChannel.map(FileChannel.MapMode.READ_ONLY,
                 0,
                 count * offHeapTypeInfo.byteSizeWithPadding(), arena);
         dataSize = dataChannel.size();
+
+        for (GlobType globType : typesToSave) {
+            if (globType != mainDataType) {
+                loadMemorySegment(directory, arena, offHeapTypeInfoMap, globType);
+            }
+        }
+    }
+
+    private void loadMemorySegment(Path directory, Arena arena, Map<GlobType, OffHeapTypeInfo> offHeapTypeInfoMap, GlobType globType) throws IOException {
+        final Path pathToFile = directory.resolve(DefaultOffHeapService.createContentFileName(globType));
+        if (Files.exists(pathToFile)) {
+            FileChannel fileChannel = FileChannel.open(pathToFile, StandardOpenOption.READ);
+            final OffHeapTypeInfo subOffHeapTypeInfo = offHeapTypeInfoMap.get(globType);
+            final long size = fileChannel.size();
+            int count = Math.toIntExact(size / subOffHeapTypeInfo.byteSizeWithPadding());
+            if (size > 0) {
+                final MemorySegment subData = fileChannel.map(FileChannel.MapMode.READ_ONLY, 0, size, arena);
+                SegmentPerGlobType segmentPerGlobType =
+                        new SegmentPerGlobType(subData.asSlice(0, subOffHeapTypeInfo.byteSizeWithPadding() * count), fileChannel,
+                                subOffHeapTypeInfo);
+                perGlobTypeMap.put(globType, segmentPerGlobType);
+            }
+        }
+    }
+
+    public record SegmentPerGlobType(MemorySegment segment, FileChannel fileChannel, OffHeapTypeInfo offHeapTypeInfo) {
     }
 
     public ReadOffHeapUniqueIndex getIndex(OffHeapUniqueIndex index) {
@@ -63,7 +92,7 @@ public class DefaultOffHeapReadService implements OffHeapReadService, StringAcce
     }
 
     public int read(OffHeapRefs offHeapRef, DataConsumer consumer) {
-        ReadContext readContext = new ReadContext(this);
+        ReadContext readContext = new ReadContext(this, perGlobTypeMap);
         final long[] offset = offHeapRef.offset().getOffset();
         final int size = offHeapRef.offset().size();
         final HandleAccess[] handleAccesses = offHeapTypeInfo.handleAccesses;
@@ -75,7 +104,7 @@ public class DefaultOffHeapReadService implements OffHeapReadService, StringAcce
     }
 
     public void readAll(DataConsumer consumer) throws IOException {
-        final ReadContext readContext = new ReadContext(this);
+        final ReadContext readContext = new ReadContext(this, perGlobTypeMap);
         final long groupSize = offHeapTypeInfo.groupLayout.byteSize();
         final GlobType type = offHeapTypeInfo.type;
         long offset = 0;
@@ -91,7 +120,7 @@ public class DefaultOffHeapReadService implements OffHeapReadService, StringAcce
     }
 
     public void readAll(DataConsumer consumer, Set<Field> onlyFields) throws IOException {
-        final ReadContext readContext = new ReadContext(this);
+        final ReadContext readContext = new ReadContext(this, perGlobTypeMap);
         final long groupSize = offHeapTypeInfo.groupLayout.byteSize();
         final GlobType type = offHeapTypeInfo.type;
         final HandleAccess[] accesses = getHandleAccesses(onlyFields);
@@ -130,7 +159,7 @@ public class DefaultOffHeapReadService implements OffHeapReadService, StringAcce
         if (offHeapRef == null || offHeapRef.index() == -1) {
             return Optional.empty();
         }
-        ReadContext readContext = new ReadContext(this);
+        ReadContext readContext = new ReadContext(this, perGlobTypeMap);
         final MutableGlob instantiate =
                 readGlob(memorySegment, offHeapRef.index(), readContext, offHeapTypeInfo.handleAccesses, offHeapTypeInfo.type);
         return Optional.of(instantiate);

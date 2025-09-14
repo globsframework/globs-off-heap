@@ -2,9 +2,11 @@ package org.globsframework.shared.mem.impl;
 
 import org.globsframework.core.functional.FunctionalKeyBuilder;
 import org.globsframework.core.metamodel.GlobType;
+import org.globsframework.core.metamodel.fields.*;
 import org.globsframework.shared.mem.*;
 import org.globsframework.shared.mem.impl.read.DefaultOffHeapReadService;
 import org.globsframework.shared.mem.impl.write.DefaultOffHeapWriteService;
+import org.globsframework.shared.mem.model.HeapInline;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,7 +16,7 @@ import java.nio.file.Path;
 import java.util.*;
 
 public class DefaultOffHeapService implements OffHeapService {
-    private static final Logger log = LoggerFactory.getLogger(DefaultOffHeapService.class);
+
     public static final String STRING_SUFFIX_ADDR = "_addr_";
     public static final String STRING_SUFFIX_LEN = "_len_";
     public static final String DATE_TIME_DATE_SUFFIX = "_date_";
@@ -24,11 +26,68 @@ public class DefaultOffHeapService implements OffHeapService {
     public static final int DATE_TIME_MAX_ZONE_ID_SIZE = 52; // to be align with 8 Bytes
     public static final String CONTENT_DATA = "content.data";
     public static final String STRINGS_DATA = "strings.data";
-    private final OffHeapTypeInfo offHeapTypeInfo;
+    public static final String GLOB_SET = "_set_";
+    public static final String GLOB_LEN = "_len_";
+    private final GlobType mainDataType;
+    private final Map<GlobType, OffHeapTypeInfo> offHeapTypeInfoMap = new HashMap<>();
     private final Map<String, Index> index = new HashMap<>();
+    private final Set<GlobType> typeToSave;
 
     public DefaultOffHeapService(GlobType type) {
-        offHeapTypeInfo = new OffHeapTypeInfo(type);
+        mainDataType = type;
+        typeToSave = new HashSet<>();
+        final HashSet<GlobType> visited = new HashSet<>();
+        extractTypeWithVarSize(type, typeToSave, visited);
+        typeToSave.add(type);
+        for (GlobType globType : visited) {
+            offHeapTypeInfoMap.put(globType, OffHeapTypeInfo.create(globType, OffHeapGlobTypeGroupLayoutImpl.create(globType)));
+        }
+    }
+
+    private static void extractTypeWithVarSize(GlobType type, Set<GlobType> globTypes, Set<GlobType> visited) {
+        if (visited.contains(type)) {
+            return;
+        }
+        visited.add(type);
+        for (Field field : type.getFields()) {
+            switch (field) {
+                case GlobArrayUnionField f -> {
+                    final Collection<GlobType> targetTypes = f.getTargetTypes();
+                    if (!f.hasAnnotation(HeapInline.UNIQUE_KEY)) {
+                        globTypes.addAll(targetTypes);
+                    }
+                    for (GlobType targetType : targetTypes) {
+                        extractTypeWithVarSize(targetType, globTypes, visited);
+                    }
+                }
+                case GlobArrayField f -> {
+                    if (!f.hasAnnotation(HeapInline.UNIQUE_KEY)) {
+                        globTypes.add(f.getTargetType());
+                    }
+                    extractTypeWithVarSize(f.getTargetType(), globTypes, visited);
+                }
+                case GlobField f -> {
+                    if (!f.hasAnnotation(HeapInline.UNIQUE_KEY)) {
+                        globTypes.add(f.getTargetType());
+                    }
+                    extractTypeWithVarSize(f.getTargetType(), globTypes, visited);
+                }
+                case GlobUnionField f -> {
+                    final Collection<GlobType> targetTypes = f.getTargetTypes();
+                    if (!f.hasAnnotation(HeapInline.UNIQUE_KEY)) {
+                        globTypes.addAll(targetTypes);
+                    }
+                    for (GlobType targetType : targetTypes) {
+                        extractTypeWithVarSize(targetType, globTypes, visited);
+                    }
+                }
+                default -> {}
+            }
+        }
+    }
+
+    public static String createContentFileName(GlobType mainDataType) {
+        return CONTENT_DATA + "_" + mainDataType.getName();
     }
 
     @Override
@@ -47,12 +106,12 @@ public class DefaultOffHeapService implements OffHeapService {
 
     @Override
     public OffHeapWriteService createWrite(Path directory) throws IOException {
-        return new DefaultOffHeapWriteService(directory, offHeapTypeInfo, index);
+        return new DefaultOffHeapWriteService(directory, mainDataType, offHeapTypeInfoMap, typeToSave, index);
     }
 
     @Override
     public OffHeapReadService createRead(Path directory, Arena arena) throws IOException {
-        return new DefaultOffHeapReadService(directory, arena, offHeapTypeInfo, index);
+        return new DefaultOffHeapReadService(directory, arena, mainDataType, offHeapTypeInfoMap, typeToSave, index);
     }
 
     public static String getIndexNameFile(String indexName) {
