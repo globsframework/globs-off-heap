@@ -2,6 +2,7 @@ package org.globsframework.shared.mem;
 
 import org.globsframework.core.functional.FunctionalKeyBuilder;
 import org.globsframework.core.metamodel.GlobType;
+import org.globsframework.core.model.GlobInstantiator;
 import org.globsframework.shared.mem.impl.DefaultOffHeapService;
 
 import java.io.IOException;
@@ -19,5 +20,9 @@ public interface OffHeapService {
 
     OffHeapWriteService createWrite(Path directory) throws IOException;
 
-    OffHeapReadService createRead(Path directory, Arena arena) throws IOException;
+    default OffHeapReadService createRead(Path directory, Arena arena) throws IOException {
+        return createRead(directory, arena, GlobType::instantiate);
+    }
+
+    OffHeapReadService createRead(Path directory, Arena arena, GlobInstantiator globInstantiator) throws IOException;
 }

@@ -3,12 +3,11 @@ package org.globsframework.shared.mem.impl;
 import org.globsframework.core.functional.FunctionalKeyBuilder;
 import org.globsframework.core.metamodel.GlobType;
 import org.globsframework.core.metamodel.fields.*;
+import org.globsframework.core.model.GlobInstantiator;
 import org.globsframework.shared.mem.*;
 import org.globsframework.shared.mem.impl.read.DefaultOffHeapReadService;
 import org.globsframework.shared.mem.impl.write.DefaultOffHeapWriteService;
 import org.globsframework.shared.mem.model.HeapInline;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.lang.foreign.*;
@@ -110,8 +109,8 @@ public class DefaultOffHeapService implements OffHeapService {
     }
 
     @Override
-    public OffHeapReadService createRead(Path directory, Arena arena) throws IOException {
-        return new DefaultOffHeapReadService(directory, arena, mainDataType, offHeapTypeInfoMap, typeToSave, index);
+    public OffHeapReadService createRead(Path directory, Arena arena, GlobInstantiator globInstantiator) throws IOException {
+        return new DefaultOffHeapReadService(directory, arena, mainDataType, offHeapTypeInfoMap, typeToSave, index, globInstantiator);
     }
 
     public static String getIndexNameFile(String indexName) {

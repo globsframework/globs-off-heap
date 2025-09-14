@@ -80,7 +80,7 @@ public class GlobArrayInlineHandleAccess implements HandleAccess {
         Glob[] globs = new Glob[len];
         final MemorySegment arraySegment = memorySegment.asSlice(offset + dataOffset);
         for (int i = 0; i < globs.length; i++) {
-            final MutableGlob instantiate = targetType.instantiate();
+            final MutableGlob instantiate = readContext.globInstantiator().newGlob(targetType);
             final long inArrayOffset = i * size;
             for (HandleAccess handleAccess : handleAccesses) {
                 handleAccess.readAtOffset(instantiate, arraySegment, inArrayOffset, readContext);
