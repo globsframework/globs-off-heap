@@ -1,5 +1,6 @@
 package org.globsframework.shared.mem;
 
+import com.google.gson.Gson;
 import org.globsframework.core.functional.FunctionalKeyBuilder;
 import org.globsframework.core.functional.FunctionalKeyBuilderFactory;
 import org.globsframework.core.model.Glob;
@@ -22,8 +23,8 @@ public class GlobContentTest {
 
     @Test
     void withGlobInGlob() throws IOException {
-        final MutableGlob d1 = Dummy1Type.TYPE.instantiate();
-        final MutableGlob d2 = Dummy1Type.TYPE.instantiate();
+        final MutableGlob d1 = Dummy1Type.TYPE.instantiate().set(Dummy1Type.id, 1);
+        final MutableGlob d2 = Dummy1Type.TYPE.instantiate().set(Dummy1Type.id, 2);
         final MutableGlob d21 = Dummy2Type.create("d21");
         final MutableGlob d22 = Dummy2Type.create("d22");
         d1.set(Dummy1Type.subObject, d21);
@@ -47,8 +48,17 @@ public class GlobContentTest {
         List<Glob> readData = new ArrayList<>();
         readHeapService.readAll(readData::add);
         Assertions.assertEquals(2, readData.size());
-        Assertions.assertEquals(GSonUtils.normalize(EXPECTED),
-                GSonUtils.normalize(GSonUtils.encode(readData.toArray(Glob[]::new), false)));
+        Glob a1 = readData.get(0);
+        Glob a2 = readData.get(1);
+        if (a1.get(Dummy1Type.id) != 1) {
+            Glob tmp = a1;
+            a1= a2;
+            a2 = tmp;
+        }
+        Assertions.assertEquals(GSonUtils.encode(d1, false),
+                GSonUtils.encode(a1, false));
+        Assertions.assertEquals(GSonUtils.encode(d2, false),
+                GSonUtils.encode(a2, false));
     }
 
     public static String EXPECTED = """

@@ -23,6 +23,7 @@ public class Dummy3Type {
     }
 
     public static MutableGlob create(String data) {
-        return TYPE.instantiate().set(Dummy3Type.data, data);
+        return TYPE.instantiate().set(Dummy3Type.data, data)
+                .set(unaligned, true);
     }
 }

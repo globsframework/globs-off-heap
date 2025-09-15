@@ -34,6 +34,7 @@ public class Dummy2Type {
     }
 
     public static MutableGlob create(String name) {
-        return TYPE.instantiate().set(Dummy2Type.name, name);
+        return TYPE.instantiate().set(Dummy2Type.name, name)
+                .set(aligned, 12);
     }
 }
