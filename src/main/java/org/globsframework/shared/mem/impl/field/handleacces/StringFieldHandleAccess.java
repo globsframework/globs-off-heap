@@ -38,7 +38,15 @@ public class StringFieldHandleAccess implements HandleAccess {
 
     @Override
     public void save(Glob data, MemorySegment memorySegment, long offset, SaveContext saveContext) {
+        if (!data.isSet(stringField)) {
+            varLenHandle.set(memorySegment, offset, -2);
+            return;
+        }
         final String str = data.get(stringField);
+        if (str == null) {
+            varLenHandle.set(memorySegment, offset, -1);
+            return;
+        }
         final Glob stringAddress = saveContext.stringAddrAccessor().get(str);
         varLenHandle.set(memorySegment, offset, stringAddress.get(StringRefType.len));
         varAddrHandle.set(memorySegment, offset, stringAddress.get(StringRefType.offset));
@@ -47,6 +55,13 @@ public class StringFieldHandleAccess implements HandleAccess {
     @Override
     public void readAtOffset(MutableGlob data, MemorySegment memorySegment, long offset, ReadContext readContext) {
         int len = (int) varLenHandle.get(memorySegment, offset);
+        if (len == -2) {
+            return;
+        }
+        if (len == -1) {
+            data.set(stringField, null);
+            return;
+        }
         int addr = (int) varAddrHandle.get(memorySegment, offset);
         data.set(stringField, readContext.stringAccessorByAddress().get(addr, len));
     }

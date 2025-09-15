@@ -340,7 +340,8 @@ public class DefaultOffHeapWriteService implements OffHeapWriteService {
                        globType.streamFields().filter(field -> field instanceof GlobArrayUnionField).toArray(GlobArrayUnionField[]::new)
                ));
         for (StringField stringField : fieldToScan.stringFields()) {
-            if (!allStrings.containsKey(glob.get(stringField))) {
+            final String key = glob.get(stringField);
+            if (key != null && !allStrings.containsKey(key)) {
                 allStrings.put(glob.get(stringField), StringRefType.TYPE.instantiate()
                         .set(StringRefType.id, ++index));
             }
