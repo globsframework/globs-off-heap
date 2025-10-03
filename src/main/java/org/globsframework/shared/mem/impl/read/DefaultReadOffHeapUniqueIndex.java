@@ -25,6 +25,7 @@ public class DefaultReadOffHeapUniqueIndex implements ReadOffHeapUniqueIndex, Re
     private final MemorySegment memorySegment;
     private final IndexTypeBuilder indexTypeBuilder;
     private final boolean isEmpty;
+    private final int maxIndex;
 
     public DefaultReadOffHeapUniqueIndex(Path path, OffHeapUniqueIndex offHeapIndex, StringAccessorByAddress stringAccessor) throws IOException {
         this.offHeapIndex = offHeapIndex;
@@ -35,6 +36,7 @@ public class DefaultReadOffHeapUniqueIndex implements ReadOffHeapUniqueIndex, Re
         final long size = indexChannel.size();
         isEmpty = size == 0;
         memorySegment = indexChannel.map(FileChannel.MapMode.READ_ONLY, 0, size, Arena.ofShared());
+        maxIndex = Math.toIntExact(size / indexTypeBuilder.offHeapIndexTypeInfo.byteSizeWithPadding());
     }
 
     public OffHeapRef find(FunctionalKey functionalKey) {
@@ -141,7 +143,6 @@ public class DefaultReadOffHeapUniqueIndex implements ReadOffHeapUniqueIndex, Re
         }
     }
 
-
     private OffHeapRef binSearch(FunctionalKey functionalKey) {
         final VarHandle dataOffsetArrayHandle = indexTypeBuilder.dataOffsetArrayHandle;
         final VarHandle indexOffset1ArrayHandle = indexTypeBuilder.indexOffset1ArrayHandle;
@@ -170,6 +171,16 @@ public class DefaultReadOffHeapUniqueIndex implements ReadOffHeapUniqueIndex, Re
                     return OffHeapRef.NULL;
                 }
             }
+        }
+    }
+
+    public void warmup() {
+        int index = 0;
+        final MemorySegment ms = memorySegment;
+        final VarHandle indexHandle = indexTypeBuilder.indexOffset1ArrayHandle;
+        while (index < maxIndex) {
+            indexHandle.get(ms, 0L, index);
+            index++;
         }
     }
 

@@ -8,4 +8,6 @@ public interface ReadOffHeapMultiIndex {
     OffHeapRefs search(FunctionalKey offHeapIndex);
 
     void free(OffHeapRefs offHeapRefs);
+
+    void warmup();
 }

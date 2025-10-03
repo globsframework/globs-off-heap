@@ -82,11 +82,11 @@ public class TestShared {
         long endInitReader = System.nanoTime();
         System.out.println("init read " + TimeUnit.NANOSECONDS.toMillis(endInitReader - startInitReader) + " ms");
 
-        for (int i = 0; i < 20; i++) {
+        for (int i = 0; i < 5; i++) {
             loopRead(readHeapService, globs);
         }
         System.out.println("read selected");
-        for (int i = 0; i < 20; i++) {
+        for (int i = 0; i < 5; i++) {
             selectRead(readHeapService, globs);
         }
         FunctionalKey[] functionalKeys = new FunctionalKey[1000];
@@ -111,10 +111,10 @@ public class TestShared {
         System.out.println("Init functionnal key ok");
         final int loop = 100;
 
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 3; i++) {
             findByIndex(loop, functionalKeys, readHeapService, offHeapUniqueIndex);
         }
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 3; i++) {
             getMultiIndex(readHeapService, offHeapMultiIndex, loop, functionalKeys);
         }
     }
@@ -165,11 +165,15 @@ public class TestShared {
         OffHeapReadService readHeapService = offHeapService.createRead(
                 Path.of("/tmp/test"), arena);
 
+        readHeapService.warmup();
+
         List<Glob> readData = new ArrayList<>();
         readHeapService.readAll(glob -> readData.add(glob));
         Assertions.assertEquals(3, globs.size());
         Assertions.assertEquals("\u63FF\uAF341", globs.get(0).get(DummyObject1.fixSizeStrNoTruncate));
         final ReadOffHeapUniqueIndex index = readHeapService.getIndex(offHeapUniqueIndex);
+
+        index.warmup();
 
         check(index, uniqueFunctionalKeyBuilder, readHeapService, 1);
         check(index, uniqueFunctionalKeyBuilder, readHeapService, 1000);
@@ -185,6 +189,7 @@ public class TestShared {
 
     private static void getMultiIndex(OffHeapReadService readHeapService, OffHeapNotUniqueIndex offHeapMultiIndex, int loop, FunctionalKey[] functionalKeys) {
         ReadOffHeapMultiIndex readOffHeapMultiIndex = readHeapService.getIndex(offHeapMultiIndex);
+        readOffHeapMultiIndex.warmup();
         System.out.println("start multi");
         long startIndex = System.nanoTime();
         for (int i = 0; i < loop; i++) {

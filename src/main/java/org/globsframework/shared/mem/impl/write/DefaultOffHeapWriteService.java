@@ -75,7 +75,6 @@ public class DefaultOffHeapWriteService implements OffHeapWriteService {
             try (FileChannel _ = FileChannel.open(path.resolve(DefaultOffHeapService.createContentFileName(dataType)),
                     StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)) {
             }
-            return;
         }
 
         for (Map.Entry<GlobType, IdentityHashMap<Glob, Glob>> globTypeIdentityHashMapEntry : extracted.entrySet()) {

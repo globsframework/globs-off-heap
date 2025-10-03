@@ -7,4 +7,5 @@ public interface ReadOffHeapUniqueIndex {
 
     OffHeapRefs search(FunctionalKey offHeapIndex);
 
+    void warmup();
 }
