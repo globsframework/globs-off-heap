@@ -106,8 +106,17 @@ public class DefaultOffHeapReadService implements OffHeapReadService, StringAcce
         return size;
     }
 
+    public void warmup() {
+        final ReadContext readContext = new ReadContext(this, perGlobTypeMap, new SameGlobInstantiator());
+        readAll(glob -> {}, readContext);
+    }
+
     public void readAll(DataConsumer consumer) throws IOException {
         final ReadContext readContext = new ReadContext(this, perGlobTypeMap, globInstantiator);
+        readAll(consumer, readContext);
+    }
+
+    private void readAll(DataConsumer consumer, ReadContext readContext) {
         final long groupSize = offHeapTypeInfo.groupLayout.byteSize();
         final GlobType type = offHeapTypeInfo.type;
         long offset = 0;
@@ -194,5 +203,13 @@ public class DefaultOffHeapReadService implements OffHeapReadService, StringAcce
         } catch (IOException e) {
         }
         dataChannel.close();
+    }
+
+    private static class SameGlobInstantiator implements GlobInstantiator {
+        private final Map<GlobType, MutableGlob> globs = new HashMap<>();
+        @Override
+        public MutableGlob newGlob(GlobType globType) {
+            return globs.computeIfAbsent(globType, GlobType::instantiate);
+        }
     }
 }

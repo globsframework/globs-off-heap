@@ -32,6 +32,7 @@ public class DefaultReadOffHeapManyIndex implements ReadOffHeapMultiIndex, ReadI
     private final IndexTypeBuilder indexTypeBuilder;
     private final LongArray[] arrayCaches = new LongArray[4];
     private final boolean isEmpty;
+    private final int maxIndex;
     private int firstFreeLongArrayCache = -1;
 
     public DefaultReadOffHeapManyIndex(Path path, OffHeapNotUniqueIndex offHeapIndex, StringAccessorByAddress stringAccessor) throws IOException {
@@ -40,10 +41,12 @@ public class DefaultReadOffHeapManyIndex implements ReadOffHeapMultiIndex, ReadI
         final String indexName = offHeapIndex.getName();
         indexTypeBuilder = new IndexTypeBuilder(indexName, offHeapIndex.getKeyBuilder().getFields());
         this.indexChannel = FileChannel.open(path.resolve(DefaultOffHeapService.getIndexNameFile(indexName)), StandardOpenOption.READ);
-        isEmpty = indexChannel.size() == 0;
+        final long size = indexChannel.size();
+        isEmpty = size == 0;
         this.indexDataRefChannel = FileChannel.open(path.resolve(DefaultOffHeapService.getIndexDataNameFile(indexName)), StandardOpenOption.READ);
-        memorySegment = indexChannel.map(FileChannel.MapMode.READ_ONLY, 0, indexChannel.size(), Arena.ofShared());
+        memorySegment = indexChannel.map(FileChannel.MapMode.READ_ONLY, 0, size, Arena.ofShared());
         dataRefMemorySegment = indexDataRefChannel.map(FileChannel.MapMode.READ_ONLY, 0, indexDataRefChannel.size(), Arena.ofShared());
+        maxIndex = Math.toIntExact(size / indexTypeBuilder.offHeapIndexTypeInfo.byteSizeWithPadding());
     }
 
     public OffHeapRefs find(FunctionalKey functionalKey) {
@@ -75,6 +78,16 @@ public class DefaultReadOffHeapManyIndex implements ReadOffHeapMultiIndex, ReadI
         binSearch(functionalKey, 0, lastIndex, filter, list::add, EqualAt.BOTH);
         final long[] index = list.stream().mapToLong(l -> l).toArray();
         return new OffHeapRefs(new LongArray(index));
+    }
+
+    public void warmup() {
+        int index = 0;
+        final MemorySegment ms = memorySegment;
+        final VarHandle indexHandle = indexTypeBuilder.indexOffset1ArrayHandle;
+        while (index < maxIndex) {
+            indexHandle.get(ms, 0L, index);
+            index++;
+        }
     }
 
     static int getLastIndex(FunctionalKey functionalKey, DataAccess[] handleAccesses) {
@@ -221,9 +234,9 @@ public class DefaultReadOffHeapManyIndex implements ReadOffHeapMultiIndex, ReadI
         if (firstFreeLongArrayCache < 0) {
             return new LongArray(new long[size]);
         } else {
-            final LongArray arrayCach = arrayCaches[firstFreeLongArrayCache--];
-            arrayCach.take(size);
-            return arrayCach;
+            final LongArray arrayCache = arrayCaches[firstFreeLongArrayCache--];
+            arrayCache.take(size);
+            return arrayCache;
         }
     }
 

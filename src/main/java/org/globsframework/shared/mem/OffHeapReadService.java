@@ -19,6 +19,8 @@ public interface OffHeapReadService extends AutoCloseable {
 
     int read(OffHeapRefs offHeapRef, DataConsumer consumer);
 
+    void warmup();
+
     interface DataConsumer {
         void accept(Glob glob);
     }
