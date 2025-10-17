@@ -52,8 +52,8 @@ public class TestOnEmpty {
         final ReadOffHeapUniqueIndex index = readHeapService.getIndex(offHeapUniqueIndex);
         final OffHeapRef offHeapRef = index.find(uniqueFunctionalKeyBuilder.create().set(TestShared.DummyObject1.val2, 1).create());
         Assertions.assertNotNull(offHeapRef);
-        final Optional<Glob> read = readHeapService.read(offHeapRef);
-        Assertions.assertFalse(read.isPresent());
+        final Glob read = readHeapService.read(offHeapRef);
+        Assertions.assertNull(read);
 
         final ReadOffHeapMultiIndex multiIndex = readHeapService.getIndex(offHeapMultiIndex);
         final OffHeapRefs offHeapRefs = multiIndex.find(multiFunctionalKeyBuilder.create().set(TestShared.DummyObject1.name, "a name 1").create());

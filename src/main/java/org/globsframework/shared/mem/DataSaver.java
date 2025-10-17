@@ -347,7 +347,6 @@ public class DataSaver {
                        GlobUnionField[] globUnionFields, GlobArrayUnionField[] globArrayUnionFields) {
     }
 
-
     public interface UpdateHeaderAccessor {
         UpdateHeaderAccessor NO = (globType, groupLayout) -> UpdateHeader.NO;
         UpdateHeader getUpdateHeader(GlobType type, GroupLayout groupLayout);
@@ -370,5 +369,4 @@ public class DataSaver {
         };
         int freeSpace(GlobType globType);
     }
-
 }

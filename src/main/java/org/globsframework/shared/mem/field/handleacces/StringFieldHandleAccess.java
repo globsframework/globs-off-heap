@@ -63,6 +63,6 @@ public class StringFieldHandleAccess implements HandleAccess {
             return;
         }
         int addr = (int) varAddrHandle.get(memorySegment, offset);
-        data.set(stringField, readContext.stringAccessorByAddress().get(addr, len));
+        data.set(stringField, readContext.get(addr, len));
     }
 }

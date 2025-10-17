@@ -183,7 +183,7 @@ public class TestShared {
     private static void check(ReadOffHeapUniqueIndex index, FunctionalKeyBuilder uniqueFunctionalKeyBuilder, OffHeapReadTreeService readHeapService, int pos) {
         final OffHeapRef offHeapRef = index.find(uniqueFunctionalKeyBuilder.create().set(DummyObject1.fixSizeStrNoTruncate, "\u63FF\uAF34" + pos).getShared());
         Assertions.assertNotNull(offHeapRef);
-        final Glob read = readHeapService.read(offHeapRef).get();
+        final Glob read = readHeapService.read(offHeapRef);
         Assertions.assertEquals(pos, read.get(DummyObject1.val1).intValue());
     }
 
@@ -220,9 +220,8 @@ public class TestShared {
                 OffHeapRef offHeapRef = readOffHeapIndex.find(functionalKey);
                 Assertions.assertNotNull(offHeapRef, functionalKey.toString());
                 Assertions.assertTrue(offHeapRef.offset() != -1, functionalKey.toString());
-                Optional<Glob> data = readHeapService.read(offHeapRef);
-                Assertions.assertTrue(data.isPresent());
-                final Glob glob = data.get();
+                Glob glob = readHeapService.read(offHeapRef);
+                Assertions.assertNotNull(glob);
                 Assertions.assertEquals(10 + (glob.get(DummyObject1.val1)) % 100, glob.get(DummyObject1.maxValue).intValue(), "at " + i);
                 Assertions.assertEquals( "a name " + ((glob.get(DummyObject1.val1)) % MODULO), glob.get(DummyObject1.name));
             }

@@ -68,8 +68,8 @@ public class GlobInlineHandleAccess implements HandleAccess {
             data.set(field, null);
             return;
         }
-        final HandleAccess[] handleAccesses = readContext.perGlobTypeMap().get(targetType).offHeapTypeInfo().handleAccesses;
-        final MutableGlob instantiate = readContext.globInstantiator().newGlob(targetType);
+        final HandleAccess[] handleAccesses = readContext.getOffHeapTypeInfo(targetType).handleAccesses;
+        final MutableGlob instantiate = readContext.newGlob(targetType);
         for (HandleAccess handleAccess : handleAccesses) {
             handleAccess.readAtOffset(instantiate, memorySegment, offset + dataOffset, readContext);
         }

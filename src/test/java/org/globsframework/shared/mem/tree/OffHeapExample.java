@@ -71,8 +71,8 @@ public class OffHeapExample {
                     .add(id)
                     .create();
             OffHeapRef ref = readIdIndex.find(keyBuilder.create().set(id, 42).create());
-            Optional<Glob> person = readService.read(ref);
-            person.ifPresent(p -> System.out.println("Found: " + p.get(name) + ", age: " + p.get(age)));
+            Glob p = readService.read(ref);
+            System.out.println("Found: " + p.get(name) + ", age: " + p.get(age));
 
             // 8.3 Get the non-unique index
             ReadOffHeapMultiIndex readNameIndex = readService.getIndex(nameIndex);

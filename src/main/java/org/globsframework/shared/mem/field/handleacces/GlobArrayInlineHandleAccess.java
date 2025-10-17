@@ -74,13 +74,13 @@ public class GlobArrayInlineHandleAccess implements HandleAccess {
             data.set(field, null);
             return;
         }
-        final OffHeapTypeInfo offHeapTypeInfo = readContext.perGlobTypeMap().get(targetType).offHeapTypeInfo();
+        final OffHeapTypeInfo offHeapTypeInfo = readContext.getOffHeapTypeInfo(targetType);
         final HandleAccess[] handleAccesses = offHeapTypeInfo.handleAccesses;
         final long size = offHeapTypeInfo.byteSize();
         Glob[] globs = new Glob[len];
         final MemorySegment arraySegment = memorySegment.asSlice(offset + dataOffset);
         for (int i = 0; i < globs.length; i++) {
-            final MutableGlob instantiate = readContext.globInstantiator().newGlob(targetType);
+            final MutableGlob instantiate = readContext.newGlob(targetType);
             final long inArrayOffset = i * size;
             for (HandleAccess handleAccess : handleAccesses) {
                 handleAccess.readAtOffset(instantiate, arraySegment, inArrayOffset, readContext);

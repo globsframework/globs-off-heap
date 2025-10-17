@@ -46,12 +46,12 @@ public class OffHeapHashServiceImpl implements OffHeapHashService {
     }
 
     @Override
-    public OffHeapWriteHashService create(Path directory) {
+    public OffHeapWriteHashService createWriter(Path directory) {
         return new OffHeapWriteHashServiceImpl(directory, type, typeToSave, offHeapTypeInfoMap, index);
     }
 
     @Override
-    public OffHeapReadHashService create(Path directory, Arena arena, GlobInstantiator globInstantiator) {
+    public OffHeapReadHashService createReader(Path directory, Arena arena, GlobInstantiator globInstantiator) {
         return new OffHeapReadHashServiceImpl(directory, arena, globInstantiator, index, type, typeToSave, offHeapTypeInfoMap);
     }
 

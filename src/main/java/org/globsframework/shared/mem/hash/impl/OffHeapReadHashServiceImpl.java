@@ -52,26 +52,8 @@ class OffHeapReadHashServiceImpl implements OffHeapReadHashService {
         HashReadIndex hashReadIndex = new HashReadIndex(hashIndex.size(), directory.resolve(name));
         return new OffHeapHashAccess() {
             @Override
-            public Optional<Glob> get(FunctionalKey key) {
-                final long at = hashReadIndex.getAt(key);
-                if (at == -1) {
-                    return Optional.empty();
-                }
-                return readDataService.read(at);
-            }
-
-            @Override
-            public Optional<Glob> get(FunctionalKey key, Predicate<Field> fields) {
-                final long at = hashReadIndex.getAt(key);
-                if (at == -1) {
-                    return Optional.empty();
-                }
-                return readDataService.read(at, fields);
-            }
-
-            @Override
-            public boolean exist(FunctionalKey key) {
-                return hashReadIndex.getAt(key) != -1;
+            public Glob get(FunctionalKey key) {
+                return hashReadIndex.getAt(key, readDataService);
             }
         };
     }

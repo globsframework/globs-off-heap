@@ -16,7 +16,7 @@ public interface OffHeapReadTreeService extends AutoCloseable {
 
     void readAll(DataConsumer consumer, Predicate<Field> onlyFields) throws IOException;
 
-    Optional<Glob> read(OffHeapRef offHeapRef);
+    Glob read(OffHeapRef offHeapRef);
 
     int read(OffHeapRefs offHeapRef, DataConsumer consumer);
 

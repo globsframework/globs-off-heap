@@ -10,8 +10,8 @@ public interface OffHeapHashService {
 
     void declare(String name, FunctionalKeyBuilder keyBuilder, int size);
 
-    OffHeapWriteHashService create(Path directory);
+    OffHeapWriteHashService createWriter(Path directory);
 
-    OffHeapReadHashService create(Path directory, Arena arena, GlobInstantiator globInstantiator);
+    OffHeapReadHashService createReader(Path directory, Arena arena, GlobInstantiator globInstantiator);
 
 }

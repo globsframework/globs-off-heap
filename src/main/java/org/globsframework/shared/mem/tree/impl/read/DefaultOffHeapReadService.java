@@ -61,9 +61,9 @@ public class DefaultOffHeapReadService implements OffHeapReadTreeService {
         readDataService.readAll(consumer, onlyFields);
     }
 
-    public Optional<Glob> read(OffHeapRef offHeapRef) {
+    public Glob read(OffHeapRef offHeapRef) {
         if (offHeapRef == null || offHeapRef.offset() == -1) {
-            return Optional.empty();
+            return null;
         }
         return readDataService.read(offHeapRef.offset());
     }

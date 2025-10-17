@@ -2,9 +2,13 @@ package org.globsframework.shared.mem.hash.impl;
 
 import org.globsframework.core.functional.FunctionalKey;
 import org.globsframework.core.metamodel.GlobType;
+import org.globsframework.core.metamodel.fields.Field;
+import org.globsframework.core.model.Glob;
+import org.globsframework.shared.mem.DefaultOffHeapReadDataService;
 import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
 import org.globsframework.shared.mem.tree.impl.OffHeapGlobTypeGroupLayoutImpl;
 import org.globsframework.shared.mem.tree.impl.OffHeapTypeInfo;
+import org.globsframework.shared.mem.tree.impl.read.ReadContext;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;
@@ -16,6 +20,7 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
+import java.util.function.Predicate;
 
 public class HashReadIndex {
     private static final long byteSizeWithPadding;
@@ -46,7 +51,7 @@ public class HashReadIndex {
         }
     }
 
-    public long getAt(FunctionalKey functionalKey) {
+    public Glob getAt(FunctionalKey functionalKey, ReadContext readContext) {
         int h = HashWriteIndex.hash(functionalKey);
         final int tableIndex = HashWriteIndex.tableIndex(h, tableSize);
 
@@ -55,15 +60,30 @@ public class HashReadIndex {
             int hash = (int) hashVarHandle.get(memorySegment, offset);
             if (hash == h) {
                 if ((boolean) isValidVarHandle.get(memorySegment, offset)) {
-                    return (long) dataIndexVarHandle.get(memorySegment, offset);
+                    Glob read = readAndCheck(functionalKey, (long) dataIndexVarHandle.get(memorySegment, offset), readContext);
+                    if (read != null) {
+                        return read;
+                    };
                 }
             }
             final int nextIndex = (int) nextIndexVarHandle.get(memorySegment, offset);
             if (nextIndex <= 0) {
-                return -1;
+                return null;
             }
             offset = nextIndex * byteSizeWithPadding;
         }
+    }
+
+    private Glob readAndCheck(FunctionalKey functionalKey, long offset, ReadContext readContext) {
+        final Glob read = readContext.read(offset);
+        if (read != null) {
+            for (Field field : functionalKey.getBuilder().getFields()) {
+                if (!field.valueEqual(functionalKey.getValue(field), read.getValue(field))) {
+                    return null;
+                }
+            }
+        }
+        return read;
     }
 
     static {
