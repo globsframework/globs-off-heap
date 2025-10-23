@@ -4,7 +4,6 @@ import org.globsframework.core.functional.FunctionalKey;
 import org.globsframework.core.metamodel.GlobType;
 import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.model.Glob;
-import org.globsframework.shared.mem.DefaultOffHeapReadDataService;
 import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
 import org.globsframework.shared.mem.tree.impl.OffHeapGlobTypeGroupLayoutImpl;
 import org.globsframework.shared.mem.tree.impl.OffHeapTypeInfo;
@@ -20,7 +19,6 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
-import java.util.function.Predicate;
 
 public class HashReadIndex {
     private static final long byteSizeWithPadding;
@@ -63,7 +61,7 @@ public class HashReadIndex {
                     Glob read = readAndCheck(functionalKey, (long) dataIndexVarHandle.get(memorySegment, offset), readContext);
                     if (read != null) {
                         return read;
-                    };
+                    }
                 }
             }
             final int nextIndex = (int) nextIndexVarHandle.get(memorySegment, offset);

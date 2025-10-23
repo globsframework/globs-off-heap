@@ -49,7 +49,7 @@ public class DefaultOffHeapWriteTreeService implements OffHeapWriteTreeService {
 
     @Override
     public void save(Collection<Glob> globs) throws IOException {
-        DataSaver dataSaver = new DataSaver(path, dataType, offHeapTypeInfoMap);
+        DataSaver dataSaver = new DataSaver(path, dataType, offHeapTypeInfoMap::get);
         final DataSaver.Result result = dataSaver.saveData(globs);
 
         for (Map.Entry<String, Index> entry : index.entrySet()) {
@@ -112,7 +112,7 @@ public class DefaultOffHeapWriteTreeService implements OffHeapWriteTreeService {
         offsets.put(indexTypeBuilder.offHeapIndexTypeInfo.type, offset);
 
         DataSaver.saveData(path.resolve(DefaultOffHeapTreeService.getIndexNameFile(indexName)),
-                indexTypeBuilder.offHeapIndexTypeInfo, offHeapTypeInfoMap, indexGlobs, 1000, allStrings, offsets);
+                indexTypeBuilder.offHeapIndexTypeInfo, offHeapTypeInfoMap::get, indexGlobs, 1000, allStrings, offsets);
     }
 
     record FunctionalKeyAndDataRef(FunctionalKey functionalKey, long dataArrayRefOrDataRef, int len) {
@@ -201,7 +201,7 @@ public class DefaultOffHeapWriteTreeService implements OffHeapWriteTreeService {
         offsets.put(indexTypeBuilder.offHeapIndexTypeInfo.type, offset);
 
         DataSaver.saveData(path.resolve(DefaultOffHeapTreeService.getIndexNameFile(indexName)), indexTypeBuilder.offHeapIndexTypeInfo,
-                offHeapTypeInfoMap, indexGlobs, 1000, allStrings, offsets);
+                offHeapTypeInfoMap::get, indexGlobs, 1000, allStrings, offsets);
     }
 
     private static IdentityHashMap<Glob, Long> computeOffset(IndexTypeBuilder indexTypeBuilder, List<Glob> indexGlobs) {

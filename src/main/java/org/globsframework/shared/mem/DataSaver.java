@@ -35,15 +35,15 @@ public class DataSaver {
     private static final Logger logger = LoggerFactory.getLogger(DataSaver.class);
     private final Path path;
     private final GlobType dataType;
-    private final Map<GlobType, OffHeapTypeInfo> offHeapTypeInfoMap;
+    private final OffHeapTypeInfoAccessor offHeapTypeInfoMap;
     private final UpdateHeaderAccessor updateHeader;
     private final FreeSpace freeSpace;
 
-    public DataSaver(Path path, GlobType dataType, Map<GlobType, OffHeapTypeInfo> offHeapTypeInfoMap) {
+    public DataSaver(Path path, GlobType dataType, OffHeapTypeInfoAccessor offHeapTypeInfoMap) {
         this(path, dataType, offHeapTypeInfoMap, UpdateHeaderAccessor.NO, FreeSpace.NONE);
     }
 
-    public DataSaver(Path path, GlobType dataType, Map<GlobType, OffHeapTypeInfo> offHeapTypeInfoMap, UpdateHeaderAccessor updateHeader, FreeSpace freeSpace) {
+    public DataSaver(Path path, GlobType dataType, OffHeapTypeInfoAccessor offHeapTypeInfoMap, UpdateHeaderAccessor updateHeader, FreeSpace freeSpace) {
         this.path = path;
         this.dataType = dataType;
         this.offHeapTypeInfoMap = offHeapTypeInfoMap;
@@ -213,13 +213,13 @@ public class DataSaver {
     }
 
     public static void saveData(Path pathToFile, OffHeapTypeInfo offHeapTypeInfo,
-                                Map<GlobType, OffHeapTypeInfo> offHeapTypeInfoMap, Collection<Glob> globs, int bufferSize, Map<String, Glob> allStrings,
+                                OffHeapTypeInfoAccessor offHeapTypeInfoMap, Collection<Glob> globs, int bufferSize, Map<String, Glob> allStrings,
                                 Map<GlobType, IdentityHashMap<Glob, Long>> offsets) throws IOException {
         saveData(pathToFile, offHeapTypeInfo, offHeapTypeInfoMap, globs, bufferSize, allStrings, offsets, UpdateHeader.NO, FreeSpace.NONE);
     }
 
     public static void saveData(Path pathToFile, OffHeapTypeInfo offHeapTypeInfo,
-                                Map<GlobType, OffHeapTypeInfo> offHeapTypeInfoMap, Collection<Glob> globs, int bufferSize, Map<String, Glob> allStrings,
+                                OffHeapTypeInfoAccessor offHeapTypeInfoMap, Collection<Glob> globs, int bufferSize, Map<String, Glob> allStrings,
                                 Map<GlobType, IdentityHashMap<Glob, Long>> offsets, UpdateHeader updateHeader,
                                 FreeSpace freeSpace) throws IOException {
         final MemorySegment memorySegment;

@@ -69,7 +69,7 @@ public class HashWriteIndex {
         for (Glob glob : linkAtEnd) {
             dataToSave.add(glob);
         }
-        DataSaver dataSaver = new DataSaver(path, PerData.TYPE, offHeapTypeInfoMap);
+        DataSaver dataSaver = new DataSaver(path, PerData.TYPE, offHeapTypeInfoMap::get);
         dataSaver.saveData(dataToSave);
     }
 

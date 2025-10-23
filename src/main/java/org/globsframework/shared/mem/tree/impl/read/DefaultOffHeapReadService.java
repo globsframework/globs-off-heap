@@ -15,7 +15,6 @@ import java.lang.foreign.Arena;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
 
@@ -25,7 +24,7 @@ public class DefaultOffHeapReadService implements OffHeapReadTreeService {
 
     public DefaultOffHeapReadService(Path directory, Arena arena, GlobType mainDataType, Map<GlobType, OffHeapTypeInfo> offHeapTypeInfoMap,
                                      Set<GlobType> typesToSave, Map<String, Index> index, GlobInstantiator globInstantiator) throws IOException {
-        readDataService = new DefaultOffHeapReadDataService(directory, arena, mainDataType, offHeapTypeInfoMap, typesToSave, globInstantiator);
+        readDataService = new DefaultOffHeapReadDataService(directory, arena, mainDataType, offHeapTypeInfoMap::get, typesToSave, globInstantiator);
         this.indexMap = new HashMap<>();
         for (Map.Entry<String, Index> entry : index.entrySet()) {
             if (entry.getValue().isUnique()) {

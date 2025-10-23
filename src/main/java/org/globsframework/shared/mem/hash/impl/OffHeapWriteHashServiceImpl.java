@@ -19,11 +19,11 @@ class OffHeapWriteHashServiceImpl implements OffHeapWriteHashService {
     private final Path directory;
     private final GlobType type;
     private final HashSet<GlobType> typeToSave;
-    private final Map<GlobType, OffHeapTypeInfo> offHeapTypeInfoMap;
+    private final Map<GlobType, OffHeapTypeInfoWithFirstLayout> offHeapTypeInfoMap;
     private final List<OffHeapHashServiceImpl.HashIndex> index;
 
     public OffHeapWriteHashServiceImpl(Path directory, GlobType type, HashSet<GlobType> typeToSave,
-                                       Map<GlobType, OffHeapTypeInfo> offHeapTypeInfoMap, List<OffHeapHashServiceImpl.HashIndex> index) {
+                                       Map<GlobType, OffHeapTypeInfoWithFirstLayout> offHeapTypeInfoMap, List<OffHeapHashServiceImpl.HashIndex> index) {
         this.directory = directory;
         this.type = type;
         this.typeToSave = typeToSave;
@@ -33,7 +33,7 @@ class OffHeapWriteHashServiceImpl implements OffHeapWriteHashService {
 
     @Override
     public void save(List<Glob> data) throws IOException {
-        DataSaver dataSaver = new DataSaver(directory, type, offHeapTypeInfoMap, new LocalUpdateHeaderAccessor(), new MyFreeSpace());
+        DataSaver dataSaver = new DataSaver(directory, type, globType -> offHeapTypeInfoMap.get(globType).offHeapTypeInfo, new LocalUpdateHeaderAccessor(), new WantedFreeSpace());
         final DataSaver.Result result = dataSaver.saveData(data);
         for (OffHeapHashServiceImpl.HashIndex hashIndex : index) {
             HashWriteIndex hashWriteIndex = new HashWriteIndex(hashIndex.size(), result.offsets().get(type), hashIndex.keyBuilder());
@@ -64,7 +64,7 @@ class OffHeapWriteHashServiceImpl implements OffHeapWriteHashService {
         }
     }
 
-    private static class MyFreeSpace implements DataSaver.FreeSpace {
+    private static class WantedFreeSpace implements DataSaver.FreeSpace {
         @Override
         public int freeSpace(GlobType globType) {
             return 100;

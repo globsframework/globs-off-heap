@@ -24,6 +24,12 @@ Hash file : Header, version, hash size, [hash, next index, data index, isValid]*
 Data file : Header, version, [isFree, [Values]*]*
 
 On cree un fichier plus grands pour reserver de la place au nouvelles valeurs. IsFree a 1 indique un emplacement libre.
+
+Comment passez de maniere atomique tous les index a 1
+
+//scan pour chercher les emplacement free.
+
+
  */
 public interface OffHeapWriteHashService {
 

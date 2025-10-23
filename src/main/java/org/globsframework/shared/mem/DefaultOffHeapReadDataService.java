@@ -39,7 +39,7 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
     private final Map<GlobType, SegmentPerGlobType> perGlobTypeMap = new HashMap<>();
     private byte[] cache = new byte[1024];
 
-    public DefaultOffHeapReadDataService(Path directory, Arena arena, GlobType mainDataType, Map<GlobType, OffHeapTypeInfo> offHeapTypeInfoMap,
+    public DefaultOffHeapReadDataService(Path directory, Arena arena, GlobType mainDataType, OffHeapTypeInfoAccessor offHeapTypeInfoMap,
                                          Set<GlobType> typesToSave,  GlobInstantiator globInstantiator) {
         try {
             this.arena = arena;
@@ -72,7 +72,7 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
         }
     }
 
-    private void loadMemorySegment(Path directory, Arena arena, Map<GlobType, OffHeapTypeInfo> offHeapTypeInfoMap, GlobType globType) throws IOException {
+    private void loadMemorySegment(Path directory, Arena arena, OffHeapTypeInfoAccessor offHeapTypeInfoMap, GlobType globType) throws IOException {
         final Path pathToFile = directory.resolve(DefaultOffHeapTreeService.createContentFileName(globType));
         if (Files.exists(pathToFile)) {
             FileChannel fileChannel = FileChannel.open(pathToFile, StandardOpenOption.READ);
