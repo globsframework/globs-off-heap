@@ -144,7 +144,7 @@ public class DataSaver {
     public record Result(Map<String, Glob> allStrings, Map<GlobType, IdentityHashMap<Glob, Long>> offsets) {
     }
 
-    private static Map<GlobType, IdentityHashMap<Glob, Glob>> extractGlobToSave(Collection<Glob> l1) {
+    public static Map<GlobType, IdentityHashMap<Glob, Glob>> extractGlobToSave(Collection<Glob> l1) {
         Map<GlobType, IdentityHashMap<Glob, Glob>> result = new HashMap<>();
         for (Glob glob : l1) {
             if (glob != null) {
@@ -200,13 +200,18 @@ public class DataSaver {
 
         try (OutputStream stream = new BufferedOutputStream(Files.newOutputStream(pathToFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING))) {
             int offset = 0;
+            byte[] forLen = new byte[4];
+            final ByteBuffer wrap = ByteBuffer.wrap(forLen);
             for (Map.Entry<String, Glob> entry : allStrings.entrySet()) {
                 final byte[] bytes = entry.getKey().getBytes(StandardCharsets.UTF_8);
                 final MutableGlob value = (MutableGlob) entry.getValue();
                 value.set(StringRefType.len, bytes.length);
-                value.set(StringRefType.offset, offset);
+                value.set(StringRefType.offset, offset + 4);
+                wrap.position(0);
+                wrap.putInt(bytes.length);
+                stream.write(forLen);
                 stream.write(bytes);
-                offset += bytes.length;
+                offset += bytes.length + 4;
             }
         }
         return allStrings;
@@ -269,7 +274,7 @@ public class DataSaver {
         }
     }
 
-    private static void getStringGlobMap(Collection<Glob> globs, Map<String, Glob> allStrings) {
+    public static void getStringGlobMap(Collection<Glob> globs, Map<String, Glob> allStrings) {
         Map<GlobType, FieldToScan> stringFieldsMap = new HashMap<>();
         int index = 0;
         for (Glob glob : globs) {
