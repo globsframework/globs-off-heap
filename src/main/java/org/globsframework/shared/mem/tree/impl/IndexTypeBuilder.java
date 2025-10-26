@@ -12,6 +12,7 @@ import org.globsframework.shared.mem.field.dataaccess.*;
 import java.lang.foreign.GroupLayout;
 import java.lang.foreign.MemoryLayout;
 import java.lang.invoke.VarHandle;
+import java.util.Map;
 
 public class IndexTypeBuilder {
     public final Field[] indexFields;
@@ -26,7 +27,7 @@ public class IndexTypeBuilder {
     public final IntegerField offsetVal2;
     public final GlobSetIntAccessor offsetVal2Accessor;
     public final GlobType indexType;
-    public final OffHeapTypeInfo offHeapIndexTypeInfo;
+    public final RootOffHeapTypeInfo offHeapIndexTypeInfo;
     public final VarHandle dataOffsetArrayHandle;
     public final VarHandle dataLenOffsetArrayHandle;
     public final VarHandle indexOffset1ArrayHandle;
@@ -51,8 +52,12 @@ public class IndexTypeBuilder {
         dataLenOffset1Accessor = indexType.getGlobFactory().getSetAccessor(dataLenOffset1);
         offsetVal1Accessor = indexType.getGlobFactory().getSetAccessor(offsetVal1);
         offsetVal2Accessor = indexType.getGlobFactory().getSetAccessor(offsetVal2);
-        offHeapIndexTypeInfo = OffHeapTypeInfo.create(indexType, OffHeapGlobTypeGroupLayoutImpl.create(indexType));
-        final GroupLayout groupLayout = offHeapIndexTypeInfo.groupLayout;
+        final OffHeapGlobTypeGroupLayoutImpl offHeapGlobTypeGroupLayout = OffHeapGlobTypeGroupLayoutImpl.create(indexType);
+        if (!offHeapGlobTypeGroupLayout.inlineType().isEmpty()) {
+            throw new RuntimeException("Inline not managed yet.");
+        }
+        offHeapIndexTypeInfo = new RootOffHeapTypeInfo(OffHeapTypeInfo.create(indexType, offHeapGlobTypeGroupLayout.getPrimaryGroupLayout()), Map.of());
+        final GroupLayout groupLayout = offHeapIndexTypeInfo.primary().groupLayout;
 
         for (int i = 0; i < keyFields.length; i++) {
             Field keyField = keyFields[i];

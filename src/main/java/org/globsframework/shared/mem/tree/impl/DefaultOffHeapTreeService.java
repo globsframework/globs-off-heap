@@ -2,6 +2,7 @@ package org.globsframework.shared.mem.tree.impl;
 
 import org.globsframework.core.functional.FunctionalKeyBuilder;
 import org.globsframework.core.metamodel.GlobType;
+import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.GlobInstantiator;
 import org.globsframework.shared.mem.DataSaver;
 import org.globsframework.shared.mem.tree.impl.read.DefaultOffHeapReadService;
@@ -27,7 +28,7 @@ public class DefaultOffHeapTreeService implements OffHeapTreeService {
     public static final String GLOB_SET = "_set_";
     public static final String GLOB_LEN = "_len_";
     private final GlobType mainDataType;
-    private final Map<GlobType, OffHeapTypeInfo> offHeapTypeInfoMap = new HashMap<>();
+    private final Map<GlobType, RootOffHeapTypeInfo> offHeapTypeInfoMap = new HashMap<>();
     private final Map<String, Index> index = new HashMap<>();
     private final Set<GlobType> typeToSave;
 
@@ -38,7 +39,14 @@ public class DefaultOffHeapTreeService implements OffHeapTreeService {
         DataSaver.extractTypeWithVarSize(type, typeToSave, visited);
         typeToSave.add(type);
         for (GlobType globType : visited) {
-            offHeapTypeInfoMap.put(globType, OffHeapTypeInfo.create(globType, OffHeapGlobTypeGroupLayoutImpl.create(globType)));
+            final OffHeapGlobTypeGroupLayoutImpl offHeapGlobTypeGroupLayout = OffHeapGlobTypeGroupLayoutImpl.create(globType);
+            final Collection<GlobType> inlineType = offHeapGlobTypeGroupLayout.inlineType();
+            Map<GlobType, OffHeapTypeInfo> inlineTypeMap = new HashMap<>();
+            for (GlobType t : inlineType) {
+                inlineTypeMap.put(t, OffHeapTypeInfo.create(t, offHeapGlobTypeGroupLayout.getGroupLayoutForInline(t)));
+            }
+            final OffHeapTypeInfo offHeapTypeInfo = OffHeapTypeInfo.create(globType, offHeapGlobTypeGroupLayout.getPrimaryGroupLayout());
+            offHeapTypeInfoMap.put(globType, new RootOffHeapTypeInfo(offHeapTypeInfo, inlineTypeMap));
         }
     }
 

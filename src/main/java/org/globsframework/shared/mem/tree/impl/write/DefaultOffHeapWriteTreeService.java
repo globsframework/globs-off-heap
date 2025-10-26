@@ -10,10 +10,7 @@ import org.globsframework.core.model.globaccessor.set.GlobSetIntAccessor;
 import org.globsframework.core.model.globaccessor.set.GlobSetLongAccessor;
 import org.globsframework.shared.mem.DataSaver;
 import org.globsframework.shared.mem.tree.OffHeapWriteTreeService;
-import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
-import org.globsframework.shared.mem.tree.impl.Index;
-import org.globsframework.shared.mem.tree.impl.IndexTypeBuilder;
-import org.globsframework.shared.mem.tree.impl.OffHeapTypeInfo;
+import org.globsframework.shared.mem.tree.impl.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,11 +31,11 @@ public class DefaultOffHeapWriteTreeService implements OffHeapWriteTreeService {
     private static final Logger logger = LoggerFactory.getLogger(DefaultOffHeapWriteTreeService.class);
     private final Path path;
     private final GlobType dataType;
-    private final Map<GlobType, OffHeapTypeInfo> offHeapTypeInfoMap;
+    private final Map<GlobType, RootOffHeapTypeInfo> offHeapTypeInfoMap;
     private final Set<GlobType> typeToSave;
     private final Map<String, Index> index;
 
-    public DefaultOffHeapWriteTreeService(Path path, GlobType dataType, Map<GlobType, OffHeapTypeInfo> offHeapTypeInfoMap,
+    public DefaultOffHeapWriteTreeService(Path path, GlobType dataType, Map<GlobType, RootOffHeapTypeInfo> offHeapTypeInfoMap,
                                           Set<GlobType> typeToSave, Map<String, Index> index) throws IOException {
         this.path = path;
         this.dataType = dataType;
@@ -109,10 +106,10 @@ public class DefaultOffHeapWriteTreeService implements OffHeapWriteTreeService {
 
         final HashMap<GlobType, IdentityHashMap<Glob, Long>> offsets = new HashMap<>();
         final IdentityHashMap<Glob, Long> offset = computeOffset(indexTypeBuilder, indexGlobs);
-        offsets.put(indexTypeBuilder.offHeapIndexTypeInfo.type, offset);
+        offsets.put(indexTypeBuilder.offHeapIndexTypeInfo.primary().type, offset);
 
         DataSaver.saveData(path.resolve(DefaultOffHeapTreeService.getIndexNameFile(indexName)),
-                indexTypeBuilder.offHeapIndexTypeInfo, offHeapTypeInfoMap::get, indexGlobs, 1000, allStrings, offsets);
+                indexTypeBuilder.offHeapIndexTypeInfo, indexGlobs, 1000, allStrings, offsets);
     }
 
     record FunctionalKeyAndDataRef(FunctionalKey functionalKey, long dataArrayRefOrDataRef, int len) {
@@ -198,15 +195,15 @@ public class DefaultOffHeapWriteTreeService implements OffHeapWriteTreeService {
                 offsetVal1Accessor, offsetVal2Accessor, keyFields, indexGlobs));
         final HashMap<GlobType, IdentityHashMap<Glob, Long>> offsets = new HashMap<>();
         final IdentityHashMap<Glob, Long> offset = computeOffset(indexTypeBuilder, indexGlobs);
-        offsets.put(indexTypeBuilder.offHeapIndexTypeInfo.type, offset);
+        offsets.put(indexTypeBuilder.offHeapIndexTypeInfo.primary().type, offset);
 
         DataSaver.saveData(path.resolve(DefaultOffHeapTreeService.getIndexNameFile(indexName)), indexTypeBuilder.offHeapIndexTypeInfo,
-                offHeapTypeInfoMap::get, indexGlobs, 1000, allStrings, offsets);
+                indexGlobs, 1000, allStrings, offsets);
     }
 
     private static IdentityHashMap<Glob, Long> computeOffset(IndexTypeBuilder indexTypeBuilder, List<Glob> indexGlobs) {
         int index = 0;
-        final long sizeWithPadding = indexTypeBuilder.offHeapIndexTypeInfo.byteSizeWithPadding();
+        final long sizeWithPadding = indexTypeBuilder.offHeapIndexTypeInfo.primary().byteSizeWithPadding();
         final IdentityHashMap<Glob, Long> offset = new IdentityHashMap<>();
         for (Glob indexGlob : indexGlobs) {
             offset.put(indexGlob, index * sizeWithPadding);

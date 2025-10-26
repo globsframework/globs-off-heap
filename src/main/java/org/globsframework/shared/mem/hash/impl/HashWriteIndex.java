@@ -11,8 +11,10 @@ import org.globsframework.core.metamodel.fields.LongField;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
 import org.globsframework.shared.mem.DataSaver;
+import org.globsframework.shared.mem.tree.impl.OffHeapGlobTypeGroupLayout;
 import org.globsframework.shared.mem.tree.impl.OffHeapGlobTypeGroupLayoutImpl;
 import org.globsframework.shared.mem.tree.impl.OffHeapTypeInfo;
+import org.globsframework.shared.mem.tree.impl.RootOffHeapTypeInfo;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -34,8 +36,9 @@ public class HashWriteIndex {
     void save(Path path) throws IOException {
         maxCollisions = 0;
         nbCollisions = 0;
-        final HashMap<GlobType, OffHeapTypeInfo> offHeapTypeInfoMap = new HashMap<>();
-        offHeapTypeInfoMap.put(PerData.TYPE, OffHeapTypeInfo.create(PerData.TYPE, OffHeapGlobTypeGroupLayoutImpl.create(PerData.TYPE)));
+        final HashMap<GlobType, RootOffHeapTypeInfo> offHeapTypeInfoMap = new HashMap<>();
+        OffHeapGlobTypeGroupLayout offHeapGlobTypeGroupLayout = OffHeapGlobTypeGroupLayoutImpl.create(PerData.TYPE);
+        offHeapTypeInfoMap.put(PerData.TYPE, new RootOffHeapTypeInfo(OffHeapTypeInfo.create(PerData.TYPE, offHeapGlobTypeGroupLayout.getPrimaryGroupLayout()), Map.of()));
         Glob[] index = new Glob[tableSize];
         List<Glob> linkAtEnd = new ArrayList<>();
         for (Map.Entry<Glob, Long> globLongEntry : this.offset.entrySet()) {

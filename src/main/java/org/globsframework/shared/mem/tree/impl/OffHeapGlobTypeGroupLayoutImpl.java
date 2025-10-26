@@ -5,23 +5,20 @@ import org.globsframework.core.metamodel.fields.Field;
 
 import java.lang.foreign.GroupLayout;
 import java.lang.foreign.ValueLayout;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 public class OffHeapGlobTypeGroupLayoutImpl implements OffHeapGlobTypeGroupLayout {
     public static final ValueLayout[] EMPTY_LAYOUTS = new ValueLayout[0];
     private final GroupLayout primaryGroupLayout;
-    private final Map<GlobType, GroupLayout> offHeapTypeInfoMap;
+    private final Map<GlobType, GroupLayout> offHeapTypeInfoMapForInline;
 
-    public OffHeapGlobTypeGroupLayoutImpl(GroupLayout primaryGroupLayout, Map<GlobType, GroupLayout> offHeapTypeInfoMap) {
+    public OffHeapGlobTypeGroupLayoutImpl(GroupLayout primaryGroupLayout, Map<GlobType, GroupLayout> offHeapTypeInfoMapForInline) {
         this.primaryGroupLayout = primaryGroupLayout;
-        this.offHeapTypeInfoMap = offHeapTypeInfoMap;
+        this.offHeapTypeInfoMapForInline = offHeapTypeInfoMapForInline;
     }
 
-    public GroupLayout getGroupLayout(GlobType globType) {
-        final GroupLayout groupLayout = offHeapTypeInfoMap.get(globType);
+    public GroupLayout getGroupLayoutForInline(GlobType globType) {
+        final GroupLayout groupLayout = offHeapTypeInfoMapForInline.get(globType);
         if (groupLayout == null) {
             throw new RuntimeException("No group layout for " + globType.getName());
         }
@@ -32,17 +29,21 @@ public class OffHeapGlobTypeGroupLayoutImpl implements OffHeapGlobTypeGroupLayou
         return primaryGroupLayout;
     }
 
+    @Override
+    public Collection<GlobType> inlineType() {
+        return offHeapTypeInfoMapForInline.keySet();
+    }
+
     public static OffHeapGlobTypeGroupLayoutImpl create(GlobType type) {
         return create(type, EMPTY_LAYOUTS);
     }
 
     public static OffHeapGlobTypeGroupLayoutImpl create(GlobType type, ValueLayout[] withFirstLayout) {
-        Map<GlobType, GroupLayout> offHeapTypeInfoMap = new HashMap<>();
+        Map<GlobType, GroupLayout> offHeapTypeInfoMapForInline = new HashMap<>();
         Set<GlobType> stack = new HashSet<>();
 
-        final GroupLayout groupLayout = getGroupLayout(type, stack, new StackedGroupLayoutAccessor(stack, offHeapTypeInfoMap), withFirstLayout);
-        offHeapTypeInfoMap.put(type, groupLayout);
-        return new OffHeapGlobTypeGroupLayoutImpl(groupLayout, offHeapTypeInfoMap);
+        final GroupLayout groupLayout = getGroupLayout(type, stack, new StackedGroupLayoutAccessor(stack, offHeapTypeInfoMapForInline), withFirstLayout);
+        return new OffHeapGlobTypeGroupLayoutImpl(groupLayout, offHeapTypeInfoMapForInline);
     }
 
     private static GroupLayout getGroupLayout(GlobType type, Set<GlobType> stack, GroupLayoutFieldVisitor.GroupLayoutAccessor layoutAccessor, ValueLayout[] withFirstLayouts) {

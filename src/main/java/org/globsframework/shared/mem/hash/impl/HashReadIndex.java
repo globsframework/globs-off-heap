@@ -1,7 +1,6 @@
 package org.globsframework.shared.mem.hash.impl;
 
 import org.globsframework.core.functional.FunctionalKey;
-import org.globsframework.core.metamodel.GlobType;
 import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.model.Glob;
 import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
@@ -85,7 +84,7 @@ public class HashReadIndex {
 
     static {
         final OffHeapGlobTypeGroupLayoutImpl offHeapGlobTypeGroupLayout = OffHeapGlobTypeGroupLayoutImpl.create(HashWriteIndex.PerData.TYPE);
-        final GroupLayout groupLayout = offHeapGlobTypeGroupLayout.getGroupLayout(HashWriteIndex.PerData.TYPE);
+        final GroupLayout groupLayout = offHeapGlobTypeGroupLayout.getPrimaryGroupLayout();
         byteSizeWithPadding = OffHeapTypeInfo.computeSizeWithPadding(groupLayout);
         byteSize = groupLayout.byteSize();
         hashVarHandle = groupLayout.varHandle(MemoryLayout.PathElement.groupElement(HashWriteIndex.PerData.hash.getName()));

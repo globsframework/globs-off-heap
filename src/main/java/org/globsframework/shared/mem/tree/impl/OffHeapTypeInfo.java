@@ -26,8 +26,7 @@ public class OffHeapTypeInfo {
         this.sizeWithPadding = sizeWithPadding;
     }
 
-    public static OffHeapTypeInfo create(GlobType type, OffHeapGlobTypeGroupLayout offHeapGlobTypeGroupLayout) {
-        GroupLayout groupLayout = offHeapGlobTypeGroupLayout.getGroupLayout(type);
+    public static OffHeapTypeInfo create(GlobType type, GroupLayout groupLayout) {
         final Field[] fields = type.getFields();
         HandleAccess[] handleAccesses = new HandleAccess[fields.length];
         for (int i = 0; i < fields.length; i++) {

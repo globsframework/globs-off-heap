@@ -10,6 +10,7 @@ import org.globsframework.shared.mem.field.handleacces.HandleAccess;
 import org.globsframework.shared.mem.tree.*;
 import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
 import org.globsframework.shared.mem.tree.impl.OffHeapTypeInfo;
+import org.globsframework.shared.mem.tree.impl.RootOffHeapTypeInfo;
 import org.globsframework.shared.mem.tree.impl.read.ReadContext;
 import org.globsframework.shared.mem.tree.impl.read.TypeSegment;
 
@@ -30,7 +31,7 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
     private final MemorySegment memorySegment;
     private final long dataSize;
     private final int count;
-    private final OffHeapTypeInfo offHeapTypeInfo;
+    private final RootOffHeapTypeInfo offHeapTypeInfo;
     private final FileChannel stringChannel;
     private final Arena arena;
     private final GlobInstantiator globInstantiator;
@@ -94,7 +95,7 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
         final Path pathToFile = directory.resolve(DefaultOffHeapTreeService.createContentFileName(globType));
         if (Files.exists(pathToFile)) {
             FileChannel fileChannel = FileChannel.open(pathToFile, StandardOpenOption.READ);
-            final OffHeapTypeInfo subOffHeapTypeInfo = offHeapTypeInfoMap.get(globType);
+            final OffHeapTypeInfo subOffHeapTypeInfo = offHeapTypeInfoMap.get(globType).primary();
             final long size = fileChannel.size();
             int count = Math.toIntExact(size / subOffHeapTypeInfo.byteSizeWithPadding());
             final MemorySegment subData = fileChannel.map(openMode, 0, size, arena);
@@ -107,8 +108,8 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
     @Override
     public int read(long[] offset, DataConsumer consumer) {
         final int size = offset.length;
-        final HandleAccess[] handleAccesses = offHeapTypeInfo.handleAccesses;
-        final GlobType type = offHeapTypeInfo.type;
+        final HandleAccess[] handleAccesses = offHeapTypeInfo.primary().handleAccesses;
+        final GlobType type = offHeapTypeInfo.primary().type;
         for (int i = 0; i < size; i++) {
             consumer.accept(readGlob(memorySegment, offset[i], this, handleAccesses, type, field -> true));
         }
@@ -126,10 +127,10 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
     }
 
     private void readAll(DataConsumer consumer, ReadContext readContext) {
-        final long groupSize = offHeapTypeInfo.groupLayout.byteSize();
-        final GlobType type = offHeapTypeInfo.type;
+        final long groupSize = offHeapTypeInfo.primary().groupLayout.byteSize();
+        final GlobType type = offHeapTypeInfo.primary().type;
         long offset = 0;
-        final HandleAccess[] handleAccesses = offHeapTypeInfo.handleAccesses;
+        final HandleAccess[] handleAccesses = offHeapTypeInfo.primary().handleAccesses;
         while (true) {
             if (offset + groupSize > dataSize) {
                 return;
@@ -142,8 +143,8 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
 
     @Override
     public void readAll(DataConsumer consumer, Predicate<Field> onlyFields) throws IOException {
-        final long groupSize = offHeapTypeInfo.groupLayout.byteSize();
-        final GlobType type = offHeapTypeInfo.type;
+        final long groupSize = offHeapTypeInfo.primary().groupLayout.byteSize();
+        final GlobType type = offHeapTypeInfo.primary().type;
         final HandleAccess[] accesses = getHandleAccesses(onlyFields);
         long offset = 0;
         while (true) {
@@ -158,7 +159,7 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
 
     private HandleAccess[] getHandleAccesses(Predicate<Field> onlyFields) {
         final List<HandleAccess> accesses = new ArrayList<>();
-        for (HandleAccess handleAccess : offHeapTypeInfo.handleAccesses) {
+        for (HandleAccess handleAccess : offHeapTypeInfo.primary().handleAccesses) {
             if (onlyFields.test(handleAccess.getField())) {
                 accesses.add(handleAccess);
             }
@@ -182,7 +183,8 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
         if (offset == -1) {
             return null;
         }
-        return readGlob(memorySegment, offset, this, offHeapTypeInfo.handleAccesses, offHeapTypeInfo.type, field -> true);
+        return readGlob(memorySegment, offset, this, offHeapTypeInfo.primary().handleAccesses,
+                offHeapTypeInfo.primary().type, field -> true);
     }
 
     @Override
@@ -190,7 +192,8 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
         if (offset == -1) {
             return null;
         }
-        return readGlob(memorySegment, offset, this, offHeapTypeInfo.handleAccesses, offHeapTypeInfo.type, onlyFields);
+        return readGlob(memorySegment, offset, this, offHeapTypeInfo.primary().handleAccesses,
+                offHeapTypeInfo.primary().type, onlyFields);
     }
 
     @Override
@@ -212,7 +215,11 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
             if (cache.length < len) {
                 cache = new byte[len];
             }
-            stringBytesBuffer.position(addr);
+            stringBytesBuffer.position(addr - 4);
+            final int writeLen = stringBytesBuffer.getInt();
+            if (writeLen != len) {
+                throw new RuntimeException("Bug : wrong length between wanted: " + len + " and real: " + writeLen);
+            }
             stringBytesBuffer.get(cache, 0, len);
             s = new String(cache, 0, len, StandardCharsets.UTF_8);
             readStrings.put(addr, s);
@@ -226,7 +233,7 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
     }
 
     @Override
-    public OffHeapTypeInfo getOffHeapTypeInfo(GlobType targetType) {
+    public OffHeapTypeInfo getOffHeapInlineTypeInfo(GlobType targetType) {
         return perGlobTypeMap.get(targetType).offHeapTypeInfo();
     }
 

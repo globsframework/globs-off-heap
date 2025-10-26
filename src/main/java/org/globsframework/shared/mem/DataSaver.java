@@ -8,8 +8,9 @@ import org.globsframework.shared.mem.field.handleacces.HandleAccess;
 import org.globsframework.shared.mem.model.HeapInline;
 import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
 import org.globsframework.shared.mem.tree.impl.OffHeapTypeInfo;
+import org.globsframework.shared.mem.tree.impl.RootOffHeapTypeInfo;
 import org.globsframework.shared.mem.tree.impl.write.Flush;
-import org.globsframework.shared.mem.tree.impl.write.FreeOffset;
+import org.globsframework.shared.mem.tree.impl.write.NextFreeOffset;
 import org.globsframework.shared.mem.tree.impl.write.SaveContext;
 import org.globsframework.shared.mem.tree.impl.write.StringRefType;
 import org.slf4j.Logger;
@@ -109,17 +110,18 @@ public class DataSaver {
         }
 
         {
-            final OffHeapTypeInfo offHeapTypeInfo = offHeapTypeInfoMap.get(dataType);
+            final RootOffHeapTypeInfo offHeapTypeInfo = offHeapTypeInfoMap.get(dataType);
             saveData(path.resolve(DefaultOffHeapTreeService.createContentFileName(dataType)),
-                    offHeapTypeInfo, offHeapTypeInfoMap,
+                    offHeapTypeInfo,
                     globs, 1024 * 1024, allStrings, offsets,
-                    updateHeader.getUpdateHeader(offHeapTypeInfo.type, offHeapTypeInfo.groupLayout), freeSpace);
+                    updateHeader.getUpdateHeader(offHeapTypeInfo.primary().type, offHeapTypeInfo.primary().groupLayout), freeSpace);
         }
 
         for (Map.Entry<GlobType, IdentityHashMap<Glob, Glob>> globTypeIdentityHashMapEntry : extracted.entrySet()) {
-            final OffHeapTypeInfo offHeapTypeInfo = offHeapTypeInfoMap.get(globTypeIdentityHashMapEntry.getKey());
+            final RootOffHeapTypeInfo rootOffHeapTypeInfo = offHeapTypeInfoMap.get(globTypeIdentityHashMapEntry.getKey());
+            final OffHeapTypeInfo offHeapTypeInfo = rootOffHeapTypeInfo.primary();
             saveData(path.resolve(DefaultOffHeapTreeService.createContentFileName(globTypeIdentityHashMapEntry.getKey())),
-                    offHeapTypeInfo, offHeapTypeInfoMap,
+                    rootOffHeapTypeInfo,
                     globTypeIdentityHashMapEntry.getValue().keySet(), 1024 * 1024, allStrings, offsets,
                     updateHeader.getUpdateHeader(offHeapTypeInfo.type, offHeapTypeInfo.groupLayout), freeSpace);
         }
@@ -128,14 +130,14 @@ public class DataSaver {
 
     private void computeOffset(GlobType key, Collection<Glob> globs, Map<GlobType, IdentityHashMap<Glob, Long>> offsets) {
         int position = 0;
-        final OffHeapTypeInfo offHeapTypeInfo = offHeapTypeInfoMap.get(key);
+        final RootOffHeapTypeInfo offHeapTypeInfo = offHeapTypeInfoMap.get(key);
         if (offHeapTypeInfo == null) {
             throw new RuntimeException("Bug : no OffHeapTypeInfo found for type " + key);
         }
         for (Glob glob : globs) {
             if (glob != null) {
                 offsets.computeIfAbsent(glob.getType(), type -> new IdentityHashMap<>())
-                        .put(glob, position * offHeapTypeInfo.byteSizeWithPadding());
+                        .put(glob, position * offHeapTypeInfo.primary().byteSizeWithPadding());
             }
             position++;
         }
@@ -213,55 +215,60 @@ public class DataSaver {
                 stream.write(bytes);
                 offset += bytes.length + 4;
             }
+            wrap.position(0);
+            wrap.putInt(-1);
+            stream.write(forLen);
         }
         return allStrings;
     }
 
-    public static void saveData(Path pathToFile, OffHeapTypeInfo offHeapTypeInfo,
-                                OffHeapTypeInfoAccessor offHeapTypeInfoMap, Collection<Glob> globs, int bufferSize, Map<String, Glob> allStrings,
+    public static void saveData(Path pathToFile, RootOffHeapTypeInfo offHeapTypeInfo,
+                                Collection<Glob> globs, int bufferSize, Map<String, Glob> allStrings,
                                 Map<GlobType, IdentityHashMap<Glob, Long>> offsets) throws IOException {
-        saveData(pathToFile, offHeapTypeInfo, offHeapTypeInfoMap, globs, bufferSize, allStrings, offsets, UpdateHeader.NO, FreeSpace.NONE);
+        saveData(pathToFile, offHeapTypeInfo, globs, bufferSize, allStrings, offsets, UpdateHeader.NO, FreeSpace.NONE);
     }
 
-    public static void saveData(Path pathToFile, OffHeapTypeInfo offHeapTypeInfo,
-                                OffHeapTypeInfoAccessor offHeapTypeInfoMap, Collection<Glob> globs, int bufferSize, Map<String, Glob> allStrings,
+    public static void saveData(Path pathToFile, RootOffHeapTypeInfo offHeapTypeInfo,
+                                Collection<Glob> globs, int bufferSize, Map<String, Glob> allStrings,
                                 Map<GlobType, IdentityHashMap<Glob, Long>> offsets, UpdateHeader updateHeader,
                                 FreeSpace freeSpace) throws IOException {
         final MemorySegment memorySegment;
-        final IdentityHashMap<Glob, Long> offsetToCheck = offsets.get(offHeapTypeInfo.type);
+        final OffHeapTypeInfo heapTypeInfo = offHeapTypeInfo.primary();
+        final IdentityHashMap<Glob, Long> offsetToCheck = offsets.get(heapTypeInfo.type);
         try (Arena arena = Arena.ofConfined()) {
             memorySegment = arena.allocate(bufferSize);
 
             try (FileChannel open = FileChannel.open(pathToFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)) {
-                final int offsetAtStart = freeSpace.freeByteSpaceAtStart(offHeapTypeInfo.type);
+                final int offsetAtStart = freeSpace.freeByteSpaceAtStart(heapTypeInfo.type);
                 if (offsetAtStart != 0) {
                     if (open.write(ByteBuffer.wrap(new byte[offsetAtStart])) != offsetAtStart) {
                         throw new RemoteException("Unable to write " + offsetAtStart + " bytes at start of file");
                     }
                 }
-                final FreeOffset freeOffset = new FreeOffset();
-                final SaveContext saveContext = new SaveContext(offsets, offHeapTypeInfoMap, allStrings::get, freeOffset, new Flush() {
+                final NextFreeOffset nextFreeOffset = new NextFreeOffset();
+                final SaveContext saveContext = new SaveContext(offsets,
+                        offHeapTypeInfo.inline()::get, allStrings::get, nextFreeOffset, new Flush() {
                     final ByteBuffer byteBuffer = memorySegment.asByteBuffer();
 
                     @Override
                     public void flush() throws IOException {
-                        if (freeOffset.memorySegmentFreeOffset == 0) {
+                        if (nextFreeOffset.memorySegmentFreeOffset == 0) {
                             return;
                         }
-                        byteBuffer.limit(Math.toIntExact(freeOffset.memorySegmentFreeOffset));
+                        byteBuffer.limit(Math.toIntExact(nextFreeOffset.memorySegmentFreeOffset));
                         if (open.write(byteBuffer) != byteBuffer.limit()) {
                             throw new RemoteException("Unable to write " + byteBuffer.limit() + ".");
                         }
                         byteBuffer.clear();
-                        freeOffset.memorySegmentFreeOffset = 0;
+                        nextFreeOffset.memorySegmentFreeOffset = 0;
                     }
                 });
 
-                final long groupSize = offHeapTypeInfo.byteSizeWithPadding();
+                final long groupSize = heapTypeInfo.byteSizeWithPadding();
                 for (Glob glob : globs) {
                     if (glob != null) {
-                        if (offHeapTypeInfo.type != glob.getType()) {
-                            final String s = "Bad type " + offHeapTypeInfo.type.getName() + " but got " + glob.getType().getName();
+                        if (heapTypeInfo.type != glob.getType()) {
+                            final String s = "Bad type " + heapTypeInfo.type.getName() + " but got " + glob.getType().getName();
                             logger.error(s);
                             throw new RemoteException(s);
                         }
@@ -269,14 +276,20 @@ public class DataSaver {
                     final long offset = saveContext.freeOffset().globalFreeOffset;
                     if (glob != null && offsetToCheck != null && offsetToCheck.get(glob) != offset) {
                         throw new RuntimeException("Offset mismatch " + offsetToCheck.get(glob) + " != " + offset + " for " +
-                                                   offHeapTypeInfo.type.getName() + " and data : " + glob);
+                                                   heapTypeInfo.type.getName() + " and data : " + glob);
                     }
-                    saveGlob(offHeapTypeInfo, bufferSize, glob, saveContext, groupSize, memorySegment, updateHeader);
+                    saveGlob(heapTypeInfo, bufferSize, glob, saveContext, groupSize, memorySegment, updateHeader);
                 }
                 saveContext.flush().flush();
-                final int i = freeSpace.freeTypeSizeSpaceAtEnd(offHeapTypeInfo.type);
+                final long nextFree = saveContext.freeOffset().globalFreeOffset;
+                final int i = freeSpace.freeTypeSizeSpaceAtEnd(heapTypeInfo.type);
                 for (int j = 0; j < i; j++) {
-                    saveGlob(offHeapTypeInfo, bufferSize, null, saveContext, groupSize, memorySegment, updateHeader);
+                    saveGlob(heapTypeInfo, bufferSize, null, saveContext, groupSize, memorySegment, updateHeader);
+                }
+
+                if (offsetAtStart != 0) {
+                    open.position(0);
+                    open.write(updateHeader.getHeaderFile(nextFree));
                 }
             }
         }
@@ -370,8 +383,15 @@ public class DataSaver {
             @Override
             public void update(MemorySegment memorySegment, long currenOffset, Glob glob) {
             }
+
+            @Override
+            public ByteBuffer getHeaderFile(long nextFree) {
+                return null;
+            }
         };
         void update(MemorySegment memorySegment, long currenOffset, Glob glob);
+
+        ByteBuffer getHeaderFile(long nextFree);
     }
 
     public interface FreeSpace {

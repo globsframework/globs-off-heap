@@ -36,7 +36,7 @@ public class DefaultReadOffHeapUniqueIndex implements ReadOffHeapUniqueIndex, Re
         final long size = indexChannel.size();
         isEmpty = size == 0;
         memorySegment = indexChannel.map(FileChannel.MapMode.READ_ONLY, 0, size, Arena.ofShared());
-        maxIndex = Math.toIntExact(size / indexTypeBuilder.offHeapIndexTypeInfo.byteSizeWithPadding());
+        maxIndex = Math.toIntExact(size / indexTypeBuilder.offHeapIndexTypeInfo.primary().byteSizeWithPadding());
     }
 
     public OffHeapRef find(FunctionalKey functionalKey) {

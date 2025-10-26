@@ -69,7 +69,6 @@ class GroupLayoutFieldVisitor extends FieldVisitor.AbstractWithErrorVisitor {
         currentPos += 4;
     }
 
-
     public void visitGlob(GlobField field) throws Exception {
         final Glob annotation = field.findAnnotation(HeapInline.UNIQUE_KEY);
         if (annotation != null) {

@@ -8,7 +8,7 @@ import org.globsframework.shared.mem.DefaultOffHeapReadDataService;
 import org.globsframework.shared.mem.OffHeapReadDataService;
 import org.globsframework.shared.mem.tree.*;
 import org.globsframework.shared.mem.tree.impl.Index;
-import org.globsframework.shared.mem.tree.impl.OffHeapTypeInfo;
+import org.globsframework.shared.mem.tree.impl.RootOffHeapTypeInfo;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;
@@ -22,7 +22,7 @@ public class DefaultOffHeapReadService implements OffHeapReadTreeService {
     private final Map<String, ReadIndex> indexMap;
     private final OffHeapReadDataService readDataService;
 
-    public DefaultOffHeapReadService(Path directory, Arena arena, GlobType mainDataType, Map<GlobType, OffHeapTypeInfo> offHeapTypeInfoMap,
+    public DefaultOffHeapReadService(Path directory, Arena arena, GlobType mainDataType, Map<GlobType, RootOffHeapTypeInfo> offHeapTypeInfoMap,
                                      Set<GlobType> typesToSave, Map<String, Index> index, GlobInstantiator globInstantiator) throws IOException {
         readDataService = new DefaultOffHeapReadDataService(directory, arena, mainDataType, offHeapTypeInfoMap::get, typesToSave, globInstantiator);
         this.indexMap = new HashMap<>();

@@ -50,7 +50,7 @@ public class GlobInlineHandleAccess implements HandleAccess {
                 byteIsSetHandle.set(memorySegment, offset, ((byte) 1));
             } else {
                 byteIsSetHandle.set(memorySegment, offset, ((byte) 0));
-                final OffHeapTypeInfo offHeapTypeInfo = saveContext.offHeapTypeInfoMap().get(targetType);
+                final OffHeapTypeInfo offHeapTypeInfo = saveContext.offHeapTypeInfoMapForInline().get(targetType);
                 for (HandleAccess handleAccess : offHeapTypeInfo.handleAccesses) {
                     handleAccess.save(glob, memorySegment, offset + dataOffset, saveContext);
                 }
@@ -68,7 +68,7 @@ public class GlobInlineHandleAccess implements HandleAccess {
             data.set(field, null);
             return;
         }
-        final HandleAccess[] handleAccesses = readContext.getOffHeapTypeInfo(targetType).handleAccesses;
+        final HandleAccess[] handleAccesses = readContext.getOffHeapInlineTypeInfo(targetType).handleAccesses;
         final MutableGlob instantiate = readContext.newGlob(targetType);
         for (HandleAccess handleAccess : handleAccesses) {
             handleAccess.readAtOffset(instantiate, memorySegment, offset + dataOffset, readContext);

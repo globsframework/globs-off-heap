@@ -15,5 +15,5 @@ public interface ReadContext {
 
     MutableGlob newGlob(GlobType targetType);
 
-    OffHeapTypeInfo getOffHeapTypeInfo(GlobType targetType);
+    OffHeapTypeInfo getOffHeapInlineTypeInfo(GlobType targetType);
 }

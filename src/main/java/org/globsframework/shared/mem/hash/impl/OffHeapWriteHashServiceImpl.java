@@ -10,9 +10,12 @@ import java.io.IOException;
 import java.lang.foreign.GroupLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.invoke.VarHandle;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+
+import static org.globsframework.shared.mem.hash.impl.OffHeapHashServiceImpl.HEADER_SIZE;
 
 class OffHeapWriteHashServiceImpl implements OffHeapWriteHashService {
     private final Path directory;
@@ -23,7 +26,8 @@ class OffHeapWriteHashServiceImpl implements OffHeapWriteHashService {
     private final OffsetHeader offsetHeader;
 
     public OffHeapWriteHashServiceImpl(Path directory, GlobType type, HashSet<GlobType> typeToSave,
-                                       Map<GlobType, OffHeapTypeInfoWithFirstLayout> offHeapTypeInfoMap, List<OffHeapHashServiceImpl.HashIndex> index, OffsetHeader offsetHeader) {
+                                       Map<GlobType, OffHeapTypeInfoWithFirstLayout> offHeapTypeInfoMap,
+                                       List<OffHeapHashServiceImpl.HashIndex> index, OffsetHeader offsetHeader) {
         this.directory = directory;
         this.type = type;
         this.typeToSave = typeToSave;
@@ -62,6 +66,13 @@ class OffHeapWriteHashServiceImpl implements OffHeapWriteHashService {
             @Override
             public void update(MemorySegment memorySegment, long currenOffset, Glob glob) {
                 isFreeVarHandle.set(memorySegment, currenOffset, glob == null);
+            }
+
+            @Override
+            public ByteBuffer getHeaderFile(long nextFree) {
+                final ByteBuffer wrap = ByteBuffer.wrap(new byte[HEADER_SIZE]);
+                wrap.putLong(nextFree);
+                return wrap;
             }
         }
     }

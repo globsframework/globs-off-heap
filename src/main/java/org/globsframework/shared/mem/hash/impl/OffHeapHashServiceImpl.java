@@ -10,6 +10,7 @@ import org.globsframework.shared.mem.hash.OffHeapUpdaterService;
 import org.globsframework.shared.mem.hash.OffHeapWriteHashService;
 import org.globsframework.shared.mem.tree.impl.OffHeapGlobTypeGroupLayoutImpl;
 import org.globsframework.shared.mem.tree.impl.OffHeapTypeInfo;
+import org.globsframework.shared.mem.tree.impl.RootOffHeapTypeInfo;
 
 import java.lang.foreign.Arena;
 import java.lang.foreign.GroupLayout;
@@ -24,11 +25,12 @@ import static org.globsframework.shared.mem.hash.impl.HashWriteIndex.tableSizeFo
 
 public class OffHeapHashServiceImpl implements OffHeapHashService {
     public static final String IS_FREE = "__isFree__";
+    public static final int HEADER_SIZE = 8;
     private final GlobType type;
     private List<HashIndex> index =  new ArrayList<HashIndex>();
     private final HashSet<GlobType> typeToSave;
     private final Map<GlobType, OffHeapTypeInfoWithFirstLayout> offHeapTypeInfoMap = new HashMap<>();
-    private final OffsetHeader offsetHeader = globType -> 8; // offset for next free position + alignement
+    private final OffsetHeader offsetHeader = globType -> HEADER_SIZE; // offset for next free position (aligned)
 
     public OffHeapHashServiceImpl(GlobType type) {
         typeToSave = new HashSet<>();
@@ -41,9 +43,14 @@ public class OffHeapHashServiceImpl implements OffHeapHashService {
         for (GlobType globType : visited) {
             final OffHeapGlobTypeGroupLayoutImpl offHeapGlobTypeGroupLayout = OffHeapGlobTypeGroupLayoutImpl.create(globType, withFirstLayout);
             final GroupLayout primaryGroupLayout = offHeapGlobTypeGroupLayout.getPrimaryGroupLayout();
+            final HashMap<GlobType, OffHeapTypeInfo> inline = new HashMap<>();
+            for (GlobType inlineType : offHeapGlobTypeGroupLayout.inlineType()) {
+                inline.put(inlineType, OffHeapTypeInfo.create(inlineType, offHeapGlobTypeGroupLayout.getGroupLayoutForInline(inlineType)));
+            }
+            RootOffHeapTypeInfo offHeapTypeInfo = new RootOffHeapTypeInfo(OffHeapTypeInfo.create(globType, offHeapGlobTypeGroupLayout.getPrimaryGroupLayout()), inline);
             final VarHandle varHandle = primaryGroupLayout.varHandle(MemoryLayout.PathElement.groupElement(IS_FREE));
             offHeapTypeInfoMap.put(globType,
-                    new OffHeapTypeInfoWithFirstLayout(varHandle, OffHeapTypeInfo.create(globType, offHeapGlobTypeGroupLayout)));
+                    new OffHeapTypeInfoWithFirstLayout(varHandle, offHeapTypeInfo));
         }
     }
 

@@ -46,7 +46,7 @@ public class DefaultReadOffHeapManyIndex implements ReadOffHeapMultiIndex, ReadI
         this.indexDataRefChannel = FileChannel.open(path.resolve(DefaultOffHeapTreeService.getIndexDataNameFile(indexName)), StandardOpenOption.READ);
         memorySegment = indexChannel.map(FileChannel.MapMode.READ_ONLY, 0, size, Arena.ofShared());
         dataRefMemorySegment = indexDataRefChannel.map(FileChannel.MapMode.READ_ONLY, 0, indexDataRefChannel.size(), Arena.ofShared());
-        maxIndex = Math.toIntExact(size / indexTypeBuilder.offHeapIndexTypeInfo.byteSizeWithPadding());
+        maxIndex = Math.toIntExact(size / indexTypeBuilder.offHeapIndexTypeInfo.primary().byteSizeWithPadding());
     }
 
     public OffHeapRefs find(FunctionalKey functionalKey) {

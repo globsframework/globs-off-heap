@@ -9,9 +9,8 @@ class OffHeapGlobTypeGroupLayoutTest {
     @Test
     void name() {
         final OffHeapGlobTypeGroupLayoutImpl offHeapGlobTypeGroupLayout = OffHeapGlobTypeGroupLayoutImpl.create(Dummy1Type.TYPE);
-        Assertions.assertDoesNotThrow(() ->  offHeapGlobTypeGroupLayout.getGroupLayout(Dummy1Type.TYPE));
-        Assertions.assertDoesNotThrow(() ->  offHeapGlobTypeGroupLayout.getGroupLayout(Dummy2Type.TYPE));
-        Assertions.assertDoesNotThrow(() ->  offHeapGlobTypeGroupLayout.getGroupLayout(Dummy3Type.TYPE));
+        Assertions.assertDoesNotThrow(() ->  offHeapGlobTypeGroupLayout.getGroupLayoutForInline(Dummy2Type.TYPE));
+        Assertions.assertDoesNotThrow(() ->  offHeapGlobTypeGroupLayout.getGroupLayoutForInline(Dummy3Type.TYPE));
     }
 
 }
