@@ -18,7 +18,6 @@ import java.lang.invoke.VarHandle;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
-import java.util.HashMap;
 
 public class HashReadIndex {
     private static final long byteSizeWithPadding;
@@ -37,8 +36,8 @@ public class HashReadIndex {
         this.tableSize = tableSize;
         try {
             this.indexChannel = FileChannel.open(path.resolve(DefaultOffHeapTreeService.createContentFileName(HashWriteIndex.PerData.TYPE)), StandardOpenOption.READ);
-            final HashMap<GlobType, OffHeapTypeInfo> offHeapTypeInfoMap = new HashMap<>();
-            final OffHeapGlobTypeGroupLayoutImpl offHeapGlobTypeGroupLayout = OffHeapGlobTypeGroupLayoutImpl.create(HashWriteIndex.PerData.TYPE);
+//            final HashMap<GlobType, OffHeapTypeInfo> offHeapTypeInfoMap = new HashMap<>();
+//            final OffHeapGlobTypeGroupLayoutImpl offHeapGlobTypeGroupLayout = OffHeapGlobTypeGroupLayoutImpl.create(HashWriteIndex.PerData.TYPE);
             this.count = Math.toIntExact(indexChannel.size() / byteSizeWithPadding);
             arena = Arena.ofShared();
             memorySegment = indexChannel.map(FileChannel.MapMode.READ_ONLY,

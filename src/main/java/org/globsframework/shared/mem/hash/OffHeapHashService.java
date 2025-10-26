@@ -14,4 +14,6 @@ public interface OffHeapHashService {
 
     OffHeapReadHashService createReader(Path directory, Arena arena, GlobInstantiator globInstantiator);
 
+    OffHeapUpdaterService createUpdater(Path directory, Arena arena);
+
 }

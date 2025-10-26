@@ -1,9 +1,11 @@
 package org.globsframework.shared.mem;
 
+import org.globsframework.core.metamodel.GlobType;
 import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.model.Glob;
 import org.globsframework.shared.mem.tree.DataConsumer;
 import org.globsframework.shared.mem.tree.impl.StringAccessorByAddress;
+import org.globsframework.shared.mem.tree.impl.read.TypeSegment;
 
 import java.io.IOException;
 import java.util.function.Predicate;
@@ -22,4 +24,6 @@ public interface OffHeapReadDataService extends StringAccessorByAddress {
     void warmup();
 
     void close();
+
+    TypeSegment getSegment(GlobType globType);
 }

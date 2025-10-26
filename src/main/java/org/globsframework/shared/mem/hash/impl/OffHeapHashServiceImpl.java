@@ -3,8 +3,10 @@ package org.globsframework.shared.mem.hash.impl;
 import org.globsframework.core.functional.FunctionalKeyBuilder;
 import org.globsframework.core.metamodel.GlobType;
 import org.globsframework.core.model.GlobInstantiator;
+import org.globsframework.shared.mem.OffsetHeader;
 import org.globsframework.shared.mem.hash.OffHeapHashService;
 import org.globsframework.shared.mem.hash.OffHeapReadHashService;
+import org.globsframework.shared.mem.hash.OffHeapUpdaterService;
 import org.globsframework.shared.mem.hash.OffHeapWriteHashService;
 import org.globsframework.shared.mem.tree.impl.OffHeapGlobTypeGroupLayoutImpl;
 import org.globsframework.shared.mem.tree.impl.OffHeapTypeInfo;
@@ -26,6 +28,7 @@ public class OffHeapHashServiceImpl implements OffHeapHashService {
     private List<HashIndex> index =  new ArrayList<HashIndex>();
     private final HashSet<GlobType> typeToSave;
     private final Map<GlobType, OffHeapTypeInfoWithFirstLayout> offHeapTypeInfoMap = new HashMap<>();
+    private final OffsetHeader offsetHeader = globType -> 8; // offset for next free position + alignement
 
     public OffHeapHashServiceImpl(GlobType type) {
         typeToSave = new HashSet<>();
@@ -54,12 +57,16 @@ public class OffHeapHashServiceImpl implements OffHeapHashService {
 
     @Override
     public OffHeapWriteHashService createWriter(Path directory) {
-        return new OffHeapWriteHashServiceImpl(directory, type, typeToSave, offHeapTypeInfoMap, index);
+        return new OffHeapWriteHashServiceImpl(directory, type, typeToSave, offHeapTypeInfoMap, index, offsetHeader);
     }
 
     @Override
     public OffHeapReadHashService createReader(Path directory, Arena arena, GlobInstantiator globInstantiator) {
-        return new OffHeapReadHashServiceImpl(directory, arena, globInstantiator, index, type, typeToSave, offHeapTypeInfoMap);
+        return new OffHeapReadHashServiceImpl(directory, arena, globInstantiator, index, type, typeToSave, offHeapTypeInfoMap, offsetHeader);
     }
 
+    @Override
+    public OffHeapUpdaterService createUpdater(Path directory, Arena arena) {
+        return new OffHeapUpdaterServiceImpl(directory, arena, index, type, typeToSave, offHeapTypeInfoMap, offsetHeader);
+    }
 }

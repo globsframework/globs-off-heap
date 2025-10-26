@@ -233,6 +233,12 @@ public class DataSaver {
             memorySegment = arena.allocate(bufferSize);
 
             try (FileChannel open = FileChannel.open(pathToFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)) {
+                final int offsetAtStart = freeSpace.freeByteSpaceAtStart(offHeapTypeInfo.type);
+                if (offsetAtStart != 0) {
+                    if (open.write(ByteBuffer.wrap(new byte[offsetAtStart])) != offsetAtStart) {
+                        throw new RemoteException("Unable to write " + offsetAtStart + " bytes at start of file");
+                    }
+                }
                 final FreeOffset freeOffset = new FreeOffset();
                 final SaveContext saveContext = new SaveContext(offsets, offHeapTypeInfoMap, allStrings::get, freeOffset, new Flush() {
                     final ByteBuffer byteBuffer = memorySegment.asByteBuffer();
@@ -243,7 +249,9 @@ public class DataSaver {
                             return;
                         }
                         byteBuffer.limit(Math.toIntExact(freeOffset.memorySegmentFreeOffset));
-                        open.write(byteBuffer);
+                        if (open.write(byteBuffer) != byteBuffer.limit()) {
+                            throw new RemoteException("Unable to write " + byteBuffer.limit() + ".");
+                        }
                         byteBuffer.clear();
                         freeOffset.memorySegmentFreeOffset = 0;
                     }
@@ -266,7 +274,7 @@ public class DataSaver {
                     saveGlob(offHeapTypeInfo, bufferSize, glob, saveContext, groupSize, memorySegment, updateHeader);
                 }
                 saveContext.flush().flush();
-                final int i = freeSpace.freeSpace(offHeapTypeInfo.type);
+                final int i = freeSpace.freeTypeSizeSpaceAtEnd(offHeapTypeInfo.type);
                 for (int j = 0; j < i; j++) {
                     saveGlob(offHeapTypeInfo, bufferSize, null, saveContext, groupSize, memorySegment, updateHeader);
                 }
@@ -368,10 +376,15 @@ public class DataSaver {
 
     public interface FreeSpace {
         FreeSpace NONE = new FreeSpace() {
-            public int freeSpace(GlobType globType) {
+            public int freeTypeSizeSpaceAtEnd(GlobType globType) {
+                return 0;
+            }
+            public int freeByteSpaceAtStart(GlobType globType) {
                 return 0;
             }
         };
-        int freeSpace(GlobType globType);
+        int freeTypeSizeSpaceAtEnd(GlobType globType);
+
+        int freeByteSpaceAtStart(GlobType globType);
     }
 }

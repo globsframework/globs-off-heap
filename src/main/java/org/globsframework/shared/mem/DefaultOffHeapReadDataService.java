@@ -11,7 +11,7 @@ import org.globsframework.shared.mem.tree.*;
 import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
 import org.globsframework.shared.mem.tree.impl.OffHeapTypeInfo;
 import org.globsframework.shared.mem.tree.impl.read.ReadContext;
-import org.globsframework.shared.mem.tree.impl.read.SegmentPerGlobType;
+import org.globsframework.shared.mem.tree.impl.read.TypeSegment;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;
@@ -26,21 +26,27 @@ import java.util.*;
 import java.util.function.Predicate;
 
 public class DefaultOffHeapReadDataService implements OffHeapReadDataService, ReadContext {
+    private final FileChannel dataChannel;
+    private final MemorySegment memorySegment;
+    private final long dataSize;
     private final int count;
     private final OffHeapTypeInfo offHeapTypeInfo;
-    private final FileChannel dataChannel;
     private final FileChannel stringChannel;
     private final Arena arena;
     private final GlobInstantiator globInstantiator;
     private final MappedByteBuffer stringBytesBuffer;
     private final IntHashMap<String> readStrings = new IntHashMap<>();
-    private final MemorySegment memorySegment;
-    private final long dataSize;
-    private final Map<GlobType, SegmentPerGlobType> perGlobTypeMap = new HashMap<>();
+    private final Map<GlobType, TypeSegment> perGlobTypeMap = new HashMap<>();
     private byte[] cache = new byte[1024];
+
 
     public DefaultOffHeapReadDataService(Path directory, Arena arena, GlobType mainDataType, OffHeapTypeInfoAccessor offHeapTypeInfoMap,
                                          Set<GlobType> typesToSave,  GlobInstantiator globInstantiator) {
+        this(directory, arena, mainDataType, offHeapTypeInfoMap, typesToSave, globInstantiator, globType -> 0);
+
+    }
+    public DefaultOffHeapReadDataService(Path directory, Arena arena, GlobType mainDataType, OffHeapTypeInfoAccessor offHeapTypeInfoMap,
+                                         Set<GlobType> typesToSave,  GlobInstantiator globInstantiator, OffsetHeader offsetHeader) {
         try {
             this.arena = arena;
             this.globInstantiator = globInstantiator;
@@ -55,38 +61,47 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
             }
 
             this.offHeapTypeInfo = offHeapTypeInfoMap.get(mainDataType);
-            this.dataChannel = FileChannel.open(directory.resolve(DefaultOffHeapTreeService.createContentFileName(mainDataType)), StandardOpenOption.READ);
-            this.count = Math.toIntExact(dataChannel.size() / offHeapTypeInfo.byteSizeWithPadding());
-            memorySegment = dataChannel.map(FileChannel.MapMode.READ_ONLY,
-                    0,
-                    count * offHeapTypeInfo.byteSizeWithPadding(), arena);
-            dataSize = dataChannel.size();
 
+            TypeSegment mainSegment = null;
             for (GlobType globType : typesToSave) {
-                if (globType != mainDataType) {
-                    loadMemorySegment(directory, arena, offHeapTypeInfoMap, globType);
+                final TypeSegment typeSegment = loadMemorySegment(directory, arena, offHeapTypeInfoMap, globType, FileChannel.MapMode.READ_ONLY,
+                        offsetHeader.offsetAtStart(globType));
+                if (typeSegment != null) {
+                    if (globType != mainDataType) {
+                        perGlobTypeMap.put(globType, typeSegment);
+                    }
+                    else {
+                        mainSegment =  typeSegment;
+                    }
                 }
+            }
+            if (mainSegment != null) {
+                this.dataChannel = mainSegment.fileChannel();
+                this.count = mainSegment.maxElementCount();
+                this.dataSize = mainSegment.size();
+                this.memorySegment = mainSegment.segment();
+            }
+            else  {
+                throw new RuntimeException("No memory segment found for " + mainDataType);
             }
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
-    private void loadMemorySegment(Path directory, Arena arena, OffHeapTypeInfoAccessor offHeapTypeInfoMap, GlobType globType) throws IOException {
+    public static TypeSegment loadMemorySegment(Path directory, Arena arena, OffHeapTypeInfoAccessor offHeapTypeInfoMap,
+                                                GlobType globType, FileChannel.MapMode openMode, int offsetForData) throws IOException {
         final Path pathToFile = directory.resolve(DefaultOffHeapTreeService.createContentFileName(globType));
         if (Files.exists(pathToFile)) {
             FileChannel fileChannel = FileChannel.open(pathToFile, StandardOpenOption.READ);
             final OffHeapTypeInfo subOffHeapTypeInfo = offHeapTypeInfoMap.get(globType);
             final long size = fileChannel.size();
             int count = Math.toIntExact(size / subOffHeapTypeInfo.byteSizeWithPadding());
-            if (size > 0) {
-                final MemorySegment subData = fileChannel.map(FileChannel.MapMode.READ_ONLY, 0, size, arena);
-                SegmentPerGlobType segmentPerGlobType =
-                        new SegmentPerGlobType(subData.asSlice(0, subOffHeapTypeInfo.byteSizeWithPadding() * count), fileChannel,
-                                subOffHeapTypeInfo);
-                perGlobTypeMap.put(globType, segmentPerGlobType);
-            }
+            final MemorySegment subData = fileChannel.map(openMode, 0, size, arena);
+            return new TypeSegment(subData.asSlice(offsetForData), subData.asSlice(offsetForData, subOffHeapTypeInfo.byteSizeWithPadding() * count), fileChannel,
+                    subOffHeapTypeInfo, count, size);
         }
+        return null;
     }
 
     @Override
@@ -180,13 +195,13 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
 
     @Override
     public Glob read(GlobType targetType, long dataOffset) {
-        final SegmentPerGlobType segmentPerGlobType = perGlobTypeMap.get(targetType);
-        if (segmentPerGlobType == null) {
+        final TypeSegment typeSegment = perGlobTypeMap.get(targetType);
+        if (typeSegment == null) {
             throw new RuntimeException("Bug " + targetType.getName() + " not found");
         }
         final MutableGlob instantiate = globInstantiator.newGlob(targetType);
-        for (HandleAccess handleAccess : segmentPerGlobType.offHeapTypeInfo().handleAccesses) {
-            handleAccess.readAtOffset(instantiate, segmentPerGlobType.segment(), dataOffset, this);
+        for (HandleAccess handleAccess : typeSegment.offHeapTypeInfo().handleAccesses) {
+            handleAccess.readAtOffset(instantiate, typeSegment.segment(), dataOffset, this);
         }
         return instantiate;
     }
@@ -226,6 +241,11 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
             dataChannel.close();
         } catch (IOException _) {
         }
+    }
+
+    @Override
+    public TypeSegment getSegment(GlobType globType) {
+        return perGlobTypeMap.get(globType);
     }
 
     private static class SameGlobInstantiator implements GlobInstantiator {

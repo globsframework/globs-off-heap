@@ -5,10 +5,9 @@ import org.globsframework.core.metamodel.GlobType;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.GlobInstantiator;
 import org.globsframework.shared.mem.DefaultOffHeapReadDataService;
+import org.globsframework.shared.mem.OffsetHeader;
 import org.globsframework.shared.mem.hash.OffHeapHashAccess;
 import org.globsframework.shared.mem.hash.OffHeapReadHashService;
-import org.globsframework.shared.mem.hash.OffHeapUpdater;
-import org.globsframework.shared.mem.tree.impl.OffHeapTypeInfo;
 
 import java.lang.foreign.Arena;
 import java.nio.file.Path;
@@ -23,11 +22,12 @@ class OffHeapReadHashServiceImpl implements OffHeapReadHashService {
     private final GlobType type;
     private final HashSet<GlobType> typeToSave;
     private final Map<GlobType, OffHeapTypeInfoWithFirstLayout> offHeapTypeInfoMap;
+    private final OffsetHeader offsetHeader;
     private final DefaultOffHeapReadDataService readDataService;
 
     public OffHeapReadHashServiceImpl(Path directory, Arena arena, GlobInstantiator globInstantiator,
                                       List<OffHeapHashServiceImpl.HashIndex> index, GlobType type,
-                                      HashSet<GlobType> typeToSave, Map<GlobType, OffHeapTypeInfoWithFirstLayout> offHeapTypeInfoMap) {
+                                      HashSet<GlobType> typeToSave, Map<GlobType, OffHeapTypeInfoWithFirstLayout> offHeapTypeInfoMap, OffsetHeader offsetHeader) {
         this.directory = directory;
         this.arena = arena;
         this.globInstantiator = globInstantiator;
@@ -35,25 +35,11 @@ class OffHeapReadHashServiceImpl implements OffHeapReadHashService {
         this.type = type;
         this.typeToSave = typeToSave;
         this.offHeapTypeInfoMap = offHeapTypeInfoMap;
+        this.offsetHeader = offsetHeader;
         readDataService =
                 new DefaultOffHeapReadDataService(directory, arena, type,
                         globType -> offHeapTypeInfoMap.get(globType).offHeapTypeInfo,
-                        typeToSave, globInstantiator);
-    }
-
-    @Override
-    public OffHeapUpdater getUpdater() {
-        return new OffHeapUpdater() {
-            @Override
-            public int update(Glob data) {
-                // extract all glob to be saved
-                // find an index for them in there respective file.
-                // write each Glob
-                // update hash to point to the new index
-                // mark free position ?
-                return 0;
-            }
-        };
+                        typeToSave, globInstantiator, offsetHeader);
     }
 
     @Override
