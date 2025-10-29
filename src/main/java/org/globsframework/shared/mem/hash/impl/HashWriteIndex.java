@@ -1,51 +1,42 @@
 package org.globsframework.shared.mem.hash.impl;
 
 import org.globsframework.core.functional.FunctionalKey;
-import org.globsframework.core.functional.FunctionalKeyBuilder;
 import org.globsframework.core.metamodel.GlobType;
 import org.globsframework.core.metamodel.GlobTypeBuilder;
 import org.globsframework.core.metamodel.GlobTypeBuilderFactory;
-import org.globsframework.core.metamodel.fields.BooleanField;
 import org.globsframework.core.metamodel.fields.IntegerField;
 import org.globsframework.core.metamodel.fields.LongField;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
 import org.globsframework.shared.mem.DataSaver;
-import org.globsframework.shared.mem.tree.impl.OffHeapGlobTypeGroupLayout;
-import org.globsframework.shared.mem.tree.impl.OffHeapGlobTypeGroupLayoutImpl;
-import org.globsframework.shared.mem.tree.impl.OffHeapTypeInfo;
-import org.globsframework.shared.mem.tree.impl.RootOffHeapTypeInfo;
+import org.globsframework.shared.mem.tree.impl.*;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.*;
 
 public class HashWriteIndex {
-    private final int tableSize;
-    private final IdentityHashMap<Glob, Long> offset;
-    private final FunctionalKeyBuilder keyBuilder;
+    private HashIndex hashIndex;
     private int maxCollisions;
     private int nbCollisions;
 
-    public HashWriteIndex(int tableSize, IdentityHashMap<Glob, Long> offset, FunctionalKeyBuilder keyBuilder) {
-        this.tableSize = tableSize;
-        this.offset = offset;
-        this.keyBuilder = keyBuilder;
+    public HashWriteIndex(HashIndex hashIndex) {
+        this.hashIndex = hashIndex;
     }
 
-    void save(Path path) throws IOException {
+
+    void save(Path path, IdentityHashMap<Glob, Long> offset) throws IOException {
         maxCollisions = 0;
         nbCollisions = 0;
-        final HashMap<GlobType, RootOffHeapTypeInfo> offHeapTypeInfoMap = new HashMap<>();
         OffHeapGlobTypeGroupLayout offHeapGlobTypeGroupLayout = OffHeapGlobTypeGroupLayoutImpl.create(PerData.TYPE);
-        offHeapTypeInfoMap.put(PerData.TYPE, new RootOffHeapTypeInfo(OffHeapTypeInfo.create(PerData.TYPE, offHeapGlobTypeGroupLayout.getPrimaryGroupLayout()), Map.of()));
-        Glob[] index = new Glob[tableSize];
+        final RootOffHeapTypeInfo rootOffHeapTypeInfo = new RootOffHeapTypeInfo(OffHeapTypeInfo.create(PerData.TYPE, offHeapGlobTypeGroupLayout.getPrimaryGroupLayout()), Map.of());
+        Glob[] index = new Glob[hashIndex.size()];
         List<Glob> linkAtEnd = new ArrayList<>();
-        for (Map.Entry<Glob, Long> globLongEntry : this.offset.entrySet()) {
-            final FunctionalKey functionalKey = keyBuilder.create(globLongEntry.getKey());
+        for (Map.Entry<Glob, Long> globLongEntry : offset.entrySet()) {
+            final FunctionalKey functionalKey = hashIndex.keyBuilder().create(globLongEntry.getKey());
             int h = hash(functionalKey);
-            final int i = tableIndex(h, tableSize);
-            final Glob glob = PerData.create(h, 0, globLongEntry.getValue(), true);
+            final int i = tableIndex(h, hashIndex.size());
+            final Glob glob = PerData.createValid(h, 0, globLongEntry.getValue());
             if (index[i] == null) {
                 index[i] = glob;
             }
@@ -54,10 +45,10 @@ public class HashWriteIndex {
                 Glob in = index[i];
                 int n;
                 while ((n = in.get(PerData.nextIndex)) != 0) {
-                    in = linkAtEnd.get(n - tableSize);
+                    in = linkAtEnd.get(n - hashIndex.size());
                     collision++;
                 }
-                ((MutableGlob) in).set(PerData.nextIndex, tableSize + linkAtEnd.size());
+                ((MutableGlob) in).set(PerData.nextIndex, hashIndex.size() + linkAtEnd.size());
                 linkAtEnd.add(glob);
                 if (collision > maxCollisions) {
                     maxCollisions = collision;
@@ -72,7 +63,17 @@ public class HashWriteIndex {
         for (Glob glob : linkAtEnd) {
             dataToSave.add(glob);
         }
-        DataSaver dataSaver = new DataSaver(path, PerData.TYPE, offHeapTypeInfoMap::get);
+        Glob empty = PerData.TYPE.instantiate()
+                .set(PerData.isValid, 2);
+        for (int i = 0; i <100; i++) {
+            dataToSave.add(empty);
+        }
+
+        DataSaver.saveData(path.resolve(DefaultOffHeapTreeService.createContentFileName(PerData.TYPE, hashIndex.name())),
+                rootOffHeapTypeInfo,
+                dataToSave, 1024 * 1024, Map.of(), Map.of(),
+                DataSaver.UpdateHeader.NO, DataSaver.FreeSpace.NONE);
+        DataSaver dataSaver = new DataSaver(path, PerData.TYPE, globType -> rootOffHeapTypeInfo);
         dataSaver.saveData(dataToSave);
     }
 
@@ -104,7 +105,7 @@ public class HashWriteIndex {
 
         public static final LongField dataIndex;
 
-        public static final BooleanField isValid;
+        public static final IntegerField isValid; // 1 : valide : 0 invalide, 2 : free
 
         static {
             final GlobTypeBuilder builder = GlobTypeBuilderFactory.create("HashHeader");
@@ -112,16 +113,16 @@ public class HashWriteIndex {
             hash = builder.declareIntegerField("hash");
             nextIndex = builder.declareIntegerField("nextIndex");
             dataIndex = builder.declareLongField("dataIndex");
-            isValid = builder.declareBooleanField("isValid");
+            isValid = builder.declareIntegerField("isValid");
             builder.complete();
         }
 
-        public static Glob create(int hash, int nextIndex, long dataIndex, boolean isValid) {
+        public static Glob createValid(int hash, int nextIndex, long dataIndex) {
             return TYPE.instantiate()
                     .set(PerData.hash, hash)
                     .set(PerData.nextIndex, nextIndex)
                     .set(PerData.dataIndex, dataIndex)
-                    .set(PerData.isValid, isValid);
+                    .set(PerData.isValid, 1);
         }
     }
 }

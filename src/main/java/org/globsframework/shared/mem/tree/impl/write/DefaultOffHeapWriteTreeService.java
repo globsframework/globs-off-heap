@@ -61,7 +61,7 @@ public class DefaultOffHeapWriteTreeService implements OffHeapWriteTreeService {
         }
     }
 
-    private void computeUniqueIndex(Collection<Glob> globs, Map<String, Glob> allStrings, Field[] keyFields,
+    private void computeUniqueIndex(Collection<Glob> globs, Map<String, StringRef> allStrings, Field[] keyFields,
                                     FunctionalKeyBuilder functionalKeyBuilder, String indexName, IdentityHashMap<Glob, Long> offsetPerData) throws IOException {
 
         //order keys
@@ -115,7 +115,7 @@ public class DefaultOffHeapWriteTreeService implements OffHeapWriteTreeService {
     record FunctionalKeyAndDataRef(FunctionalKey functionalKey, long dataArrayRefOrDataRef, int len) {
     }
 
-    private void computeMultiIndex(Collection<Glob> globs, Map<String, Glob> allStrings, Field[] keyFields,
+    private void computeMultiIndex(Collection<Glob> globs, Map<String, StringRef> allStrings, Field[] keyFields,
                                    FunctionalKeyBuilder functionalKeyBuilder, String indexName, IdentityHashMap<Glob, Long> offsetPerData) throws IOException {
         TreeMap<FunctionalKey, List<Glob>> indice = new TreeMap<>(new IndexFunctionalKeyComparator(keyFields));
         for (Glob glob : globs) {

@@ -7,7 +7,7 @@ import org.globsframework.core.model.MutableGlob;
 import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
 import org.globsframework.shared.mem.tree.impl.read.ReadContext;
 import org.globsframework.shared.mem.tree.impl.write.SaveContext;
-import org.globsframework.shared.mem.tree.impl.write.StringRefType;
+import org.globsframework.shared.mem.tree.impl.write.StringRef;
 
 import java.lang.foreign.GroupLayout;
 import java.lang.foreign.MemoryLayout;
@@ -47,9 +47,9 @@ public class StringFieldHandleAccess implements HandleAccess {
             varLenHandle.set(memorySegment, offset, -1);
             return;
         }
-        final Glob stringAddress = saveContext.stringAddrAccessor().get(str);
-        varLenHandle.set(memorySegment, offset, stringAddress.get(StringRefType.len));
-        varAddrHandle.set(memorySegment, offset, stringAddress.get(StringRefType.offset));
+        final StringRef stringAddress = saveContext.stringAddrAccessor().get(str);
+        varLenHandle.set(memorySegment, offset, stringAddress.len);
+        varAddrHandle.set(memorySegment, offset, stringAddress.offset);
     }
 
     @Override

@@ -1,5 +1,6 @@
 package org.globsframework.shared.mem.field.handleacces;
 
+import org.globsframework.core.metamodel.GlobType;
 import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
@@ -16,4 +17,10 @@ public interface HandleAccess {
 
     void readAtOffset(MutableGlob data, MemorySegment memorySegment, long offset, ReadContext readContext);
 
+    default void scanOffset(MemorySegment memorySegment, long offset, ReferenceOffset referenceOffset){
+    }
+
+    public interface ReferenceOffset {
+        void onRef(GlobType type, long offset);
+    }
 }

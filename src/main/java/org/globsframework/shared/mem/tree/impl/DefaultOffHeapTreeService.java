@@ -54,6 +54,10 @@ public class DefaultOffHeapTreeService implements OffHeapTreeService {
         return CONTENT_DATA + "_" + mainDataType.getName();
     }
 
+    public static String createContentFileName(GlobType mainDataType, String suffix) {
+        return CONTENT_DATA + "_" + mainDataType.getName() + suffix;
+    }
+
     @Override
     public OffHeapUniqueIndex declareUniqueIndex(String name, FunctionalKeyBuilder functionalKeyBuilder) {
         final DefaultOffHeapIndex value = new DefaultOffHeapIndex(name, functionalKeyBuilder, true);

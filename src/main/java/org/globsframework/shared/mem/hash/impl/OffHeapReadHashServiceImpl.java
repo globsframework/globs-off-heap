@@ -18,7 +18,7 @@ class OffHeapReadHashServiceImpl implements OffHeapReadHashService {
     private final Path directory;
     private final Arena arena;
     private final GlobInstantiator globInstantiator;
-    private final List<OffHeapHashServiceImpl.HashIndex> index;
+    private final List<HashIndex> index;
     private final GlobType type;
     private final HashSet<GlobType> typeToSave;
     private final Map<GlobType, OffHeapTypeInfoWithFirstLayout> offHeapTypeInfoMap;
@@ -26,7 +26,7 @@ class OffHeapReadHashServiceImpl implements OffHeapReadHashService {
     private final DefaultOffHeapReadDataService readDataService;
 
     public OffHeapReadHashServiceImpl(Path directory, Arena arena, GlobInstantiator globInstantiator,
-                                      List<OffHeapHashServiceImpl.HashIndex> index, GlobType type,
+                                      List<HashIndex> index, GlobType type,
                                       HashSet<GlobType> typeToSave, Map<GlobType, OffHeapTypeInfoWithFirstLayout> offHeapTypeInfoMap, OffsetHeader offsetHeader) {
         this.directory = directory;
         this.arena = arena;
@@ -44,9 +44,9 @@ class OffHeapReadHashServiceImpl implements OffHeapReadHashService {
 
     @Override
     public OffHeapHashAccess getReader(String name) {
-        OffHeapHashServiceImpl.HashIndex hashIndex = getHashIndex(name);
+        HashIndex hashIndex = getHashIndex(name);
 
-        HashReadIndex hashReadIndex = new HashReadIndex(hashIndex.size(), directory.resolve(name));
+        HashReadIndex hashReadIndex = new HashReadIndex(hashIndex, directory);
         return new OffHeapHashAccess() {
             @Override
             public Glob get(FunctionalKey key) {
@@ -55,8 +55,8 @@ class OffHeapReadHashServiceImpl implements OffHeapReadHashService {
         };
     }
 
-    private OffHeapHashServiceImpl.HashIndex getHashIndex(String name) {
-        for (OffHeapHashServiceImpl.HashIndex hashIndex : this.index) {
+    private HashIndex getHashIndex(String name) {
+        for (HashIndex hashIndex : this.index) {
             if (hashIndex.name().equals(name)) {
                 return hashIndex;
             }

@@ -74,8 +74,27 @@ public class GlobArrayHandleAccess implements HandleAccess {
         Glob[] globs = new Glob[len];
         for (int i = 0; i < globs.length; i++) {
             long off = (long) sequenceVarHandle.get(memorySegment, offset, (long) i);
-            globs[i] = readContext.read(targetType, off);
+            if (off >= 0) {
+                globs[i] = readContext.read(targetType, off);
+            }
         }
         data.set(field, globs);
+    }
+
+    @Override
+    public void scanOffset(MemorySegment memorySegment, long offset, ReferenceOffset referenceOffset) {
+        int len = (int) lenVarHandle.get(memorySegment, offset);
+        if (len == -2) {
+            return;
+        }
+        if (len == -1) {
+            return;
+        }
+        for (int i = 0; i < len; i++) {
+            long dataOffset = (long) sequenceVarHandle.get(memorySegment, offset, (long) i);
+            if (dataOffset >= 0) {
+                referenceOffset.onRef(targetType, dataOffset);
+            }
+        }
     }
 }

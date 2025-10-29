@@ -24,10 +24,10 @@ import static org.globsframework.shared.mem.DataSaver.extractTypeWithVarSize;
 import static org.globsframework.shared.mem.hash.impl.HashWriteIndex.tableSizeFor;
 
 public class OffHeapHashServiceImpl implements OffHeapHashService {
-    public static final String IS_FREE = "__isFree__";
+    public static final String FREE_ID = "__FreeId__";
     public static final int HEADER_SIZE = 8;
     private final GlobType type;
-    private List<HashIndex> index =  new ArrayList<HashIndex>();
+    private final List<HashIndex> index =  new ArrayList<HashIndex>();
     private final HashSet<GlobType> typeToSave;
     private final Map<GlobType, OffHeapTypeInfoWithFirstLayout> offHeapTypeInfoMap = new HashMap<>();
     private final OffsetHeader offsetHeader = globType -> HEADER_SIZE; // offset for next free position (aligned)
@@ -38,7 +38,7 @@ public class OffHeapHashServiceImpl implements OffHeapHashService {
         final Set<GlobType> visited = new HashSet<>();
         extractTypeWithVarSize(type, typeToSave, visited);
         typeToSave.add(type);
-        ValueLayout valueLayout = ValueLayout.JAVA_BOOLEAN.withName(IS_FREE);
+        ValueLayout valueLayout = ValueLayout.JAVA_LONG.withName(FREE_ID);
         final ValueLayout[] withFirstLayout = {valueLayout};
         for (GlobType globType : visited) {
             final OffHeapGlobTypeGroupLayoutImpl offHeapGlobTypeGroupLayout = OffHeapGlobTypeGroupLayoutImpl.create(globType, withFirstLayout);
@@ -48,13 +48,10 @@ public class OffHeapHashServiceImpl implements OffHeapHashService {
                 inline.put(inlineType, OffHeapTypeInfo.create(inlineType, offHeapGlobTypeGroupLayout.getGroupLayoutForInline(inlineType)));
             }
             RootOffHeapTypeInfo offHeapTypeInfo = new RootOffHeapTypeInfo(OffHeapTypeInfo.create(globType, offHeapGlobTypeGroupLayout.getPrimaryGroupLayout()), inline);
-            final VarHandle varHandle = primaryGroupLayout.varHandle(MemoryLayout.PathElement.groupElement(IS_FREE));
+            final VarHandle varHandle = primaryGroupLayout.varHandle(MemoryLayout.PathElement.groupElement(FREE_ID));
             offHeapTypeInfoMap.put(globType,
                     new OffHeapTypeInfoWithFirstLayout(varHandle, offHeapTypeInfo));
         }
-    }
-
-    record HashIndex(String name, FunctionalKeyBuilder keyBuilder, int size) {
     }
 
     @Override

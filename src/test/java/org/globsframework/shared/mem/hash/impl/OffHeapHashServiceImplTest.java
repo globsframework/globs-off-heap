@@ -11,6 +11,7 @@ import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
 import org.globsframework.shared.mem.hash.OffHeapHashAccess;
 import org.globsframework.shared.mem.hash.OffHeapReadHashService;
+import org.globsframework.shared.mem.hash.OffHeapUpdaterService;
 import org.globsframework.shared.mem.hash.OffHeapWriteHashService;
 import org.globsframework.shared.mem.impl.Dummy1Type;
 import org.globsframework.shared.mem.impl.Dummy2Type;
@@ -97,10 +98,7 @@ class OffHeapHashServiceImplTest {
     }
 
     @Test
-    @Disabled
     void withSameHash() throws IOException {
-
-
         FunctionalKeyBuilder keyBuilder = FunctionalKeyBuilderFactory.create(MultiKey.TYPE)
                 .add(MultiKey.id)
                 .create();
@@ -116,7 +114,7 @@ class OffHeapHashServiceImplTest {
 //            i++;
 //        }
         final MutableGlob g1 = MultiKey.TYPE.instantiate().set(MultiKey.id, 1).set(MultiKey.val1, 1);
-        final MutableGlob g2 =  MultiKey.TYPE.instantiate().set(MultiKey.id, 4294967296L).set(MultiKey.val1, 2);
+        final MutableGlob g2 = MultiKey.TYPE.instantiate().set(MultiKey.id, 4294967296L).set(MultiKey.val1, 2);
         final MutableGlob g3 = MultiKey.TYPE.instantiate().set(MultiKey.id, 8589934595L).set(MultiKey.val1, 3);
         Path storagePath = Files.createTempDirectory("offheap-hash");
         Files.createDirectories(storagePath);
@@ -153,6 +151,48 @@ class OffHeapHashServiceImplTest {
             id = typeBuilder.declareLongField("id");
             val1 = typeBuilder.declareLongField("val1");
             typeBuilder.complete();
+        }
+    }
+
+    @Test
+    void update() throws IOException {
+        final int inserted = 10_000;
+
+        OffHeapHashServiceImpl offHeapHashService = new OffHeapHashServiceImpl(Dummy1Type.TYPE);
+        final FunctionalKeyBuilder keyBuilder = FunctionalKeyBuilderFactory.create(Dummy1Type.TYPE)
+                .add(Dummy1Type.id)
+                .create();
+        offHeapHashService.declare("id", keyBuilder, inserted * 2 + 100);
+
+        List<Glob> globs = new ArrayList<>();
+        for (int i = 0; i < inserted; i++) {
+            final Glob set = Dummy1Type.create(i, "name " + i, null, Dummy2Type.create("sub " + i));
+            globs.add(set);
+        }
+        Path storagePath = Files.createTempDirectory("offheap-hash");
+        Files.createDirectories(storagePath);
+
+        final OffHeapWriteHashService offHeapWriteHashService = offHeapHashService.createWriter(storagePath);
+        offHeapWriteHashService.save(globs);
+        final OffHeapReadHashService offHeapReadHashService =
+                offHeapHashService.createReader(storagePath, Arena.ofShared(), GlobType::instantiate);
+        final OffHeapHashAccess reader = offHeapReadHashService.getReader("id");
+
+        final OffHeapUpdaterService updater = offHeapHashService.createUpdater(storagePath, Arena.ofShared());
+
+        int end = inserted + 100;
+        int start = Math.max(0, end - 100);
+        for (int i = start; i < end; i++) {
+//        int i = 100;
+            final Glob data = Dummy1Type.create(i, "name " + (i + 1), null, Dummy2Type.create("sub " + (i + 2)));
+            updater.update(data);
+        }
+
+        for (int i = start; i < end; i++) {
+            final Glob glob = reader.get(keyBuilder.create().set(Dummy1Type.id, i).create());
+            Assertions.assertNotNull(glob, "Glob is null at " + i);
+            Assertions.assertEquals("name " + (i + 1), glob.get(Dummy1Type.name));
+            Assertions.assertEquals("sub " + (i + 2), glob.get(Dummy1Type.subObject).get(Dummy2Type.name));
         }
     }
 }

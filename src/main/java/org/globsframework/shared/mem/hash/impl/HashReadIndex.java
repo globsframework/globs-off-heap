@@ -17,26 +17,26 @@ import java.lang.invoke.VarHandle;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.function.Predicate;
 
 public class HashReadIndex {
-    private static final long byteSizeWithPadding;
-    private static final long byteSize;
-    private static final VarHandle hashVarHandle;
-    private static final VarHandle nextIndexVarHandle;
-    private static final VarHandle dataIndexVarHandle;
-    private static final VarHandle isValidVarHandle;
-    private final int tableSize;
+    public static final long byteSizeWithPadding;
+    public static final long byteSize;
+    public static final VarHandle hashVarHandle;
+    public static final VarHandle nextIndexVarHandle;
+    public static final VarHandle dataIndexVarHandle;
+    public static final VarHandle isValidVarHandle;
     private final FileChannel indexChannel;
     private final int count;
     private final Arena arena;
     private final MemorySegment memorySegment;
+    private final HashIndex hashIndex;
 
-    public HashReadIndex(int tableSize, Path path) {
-        this.tableSize = tableSize;
+    public HashReadIndex(HashIndex hashIndex, Path path) {
+        this.hashIndex = hashIndex;
         try {
-            this.indexChannel = FileChannel.open(path.resolve(DefaultOffHeapTreeService.createContentFileName(HashWriteIndex.PerData.TYPE)), StandardOpenOption.READ);
-//            final HashMap<GlobType, OffHeapTypeInfo> offHeapTypeInfoMap = new HashMap<>();
-//            final OffHeapGlobTypeGroupLayoutImpl offHeapGlobTypeGroupLayout = OffHeapGlobTypeGroupLayoutImpl.create(HashWriteIndex.PerData.TYPE);
+            this.indexChannel = FileChannel.open(
+                    path.resolve(DefaultOffHeapTreeService.createContentFileName(HashWriteIndex.PerData.TYPE, hashIndex.name())), StandardOpenOption.READ);
             this.count = Math.toIntExact(indexChannel.size() / byteSizeWithPadding);
             arena = Arena.ofShared();
             memorySegment = indexChannel.map(FileChannel.MapMode.READ_ONLY,
@@ -49,14 +49,14 @@ public class HashReadIndex {
 
     public Glob getAt(FunctionalKey functionalKey, ReadContext readContext) {
         int h = HashWriteIndex.hash(functionalKey);
-        final int tableIndex = HashWriteIndex.tableIndex(h, tableSize);
+        final int tableIndex = HashWriteIndex.tableIndex(h, hashIndex.size());
 
         long offset = tableIndex * byteSizeWithPadding;
         while (true) {
             int hash = (int) hashVarHandle.get(memorySegment, offset);
             if (hash == h) {
-                if ((boolean) isValidVarHandle.get(memorySegment, offset)) {
-                    Glob read = readAndCheck(functionalKey, (long) dataIndexVarHandle.get(memorySegment, offset), readContext);
+                if ((int) isValidVarHandle.get(memorySegment, offset) == 1) {
+                    Glob read = readAndCheck(functionalKey, (long) dataIndexVarHandle.get(memorySegment, offset), readContext, field -> true);
                     if (read != null) {
                         return read;
                     }
@@ -70,8 +70,8 @@ public class HashReadIndex {
         }
     }
 
-    private Glob readAndCheck(FunctionalKey functionalKey, long offset, ReadContext readContext) {
-        final Glob read = readContext.read(offset);
+    public static Glob readAndCheck(FunctionalKey functionalKey, long offset, ReadContext readContext, Predicate<Field> contains) {
+        final Glob read = readContext.read(offset, contains);
         if (read != null) {
             for (Field field : functionalKey.getBuilder().getFields()) {
                 if (!field.valueEqual(functionalKey.getValue(field), read.getValue(field))) {

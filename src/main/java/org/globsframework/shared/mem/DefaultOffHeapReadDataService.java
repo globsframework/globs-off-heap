@@ -65,8 +65,10 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
 
             TypeSegment mainSegment = null;
             for (GlobType globType : typesToSave) {
-                final TypeSegment typeSegment = loadMemorySegment(directory, arena, offHeapTypeInfoMap, globType, FileChannel.MapMode.READ_ONLY,
-                        offsetHeader.offsetAtStart(globType));
+                final Path pathToFile = directory.resolve(DefaultOffHeapTreeService.createContentFileName(globType));
+                final TypeSegment typeSegment = loadMemorySegment(arena, FileChannel.MapMode.READ_ONLY,
+                        offsetHeader.offsetAtStart(globType), offHeapTypeInfoMap.get(globType).primary(),
+                        pathToFile);
                 if (typeSegment != null) {
                     if (globType != mainDataType) {
                         perGlobTypeMap.put(globType, typeSegment);
@@ -90,12 +92,10 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
         }
     }
 
-    public static TypeSegment loadMemorySegment(Path directory, Arena arena, OffHeapTypeInfoAccessor offHeapTypeInfoMap,
-                                                GlobType globType, FileChannel.MapMode openMode, int offsetForData) throws IOException {
-        final Path pathToFile = directory.resolve(DefaultOffHeapTreeService.createContentFileName(globType));
+    public static TypeSegment loadMemorySegment(Arena arena,
+                                                FileChannel.MapMode openMode, int offsetForData, OffHeapTypeInfo subOffHeapTypeInfo, Path pathToFile) throws IOException {
         if (Files.exists(pathToFile)) {
-            FileChannel fileChannel = FileChannel.open(pathToFile, StandardOpenOption.READ);
-            final OffHeapTypeInfo subOffHeapTypeInfo = offHeapTypeInfoMap.get(globType).primary();
+            FileChannel fileChannel = FileChannel.open(pathToFile, StandardOpenOption.READ, openMode == FileChannel.MapMode.READ_ONLY ? StandardOpenOption.READ : StandardOpenOption.WRITE);
             final long size = fileChannel.size();
             int count = Math.toIntExact(size / subOffHeapTypeInfo.byteSizeWithPadding());
             final MemorySegment subData = fileChannel.map(openMode, 0, size, arena);

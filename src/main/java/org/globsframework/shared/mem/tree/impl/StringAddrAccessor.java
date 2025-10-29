@@ -1,7 +1,7 @@
 package org.globsframework.shared.mem.tree.impl;
 
-import org.globsframework.core.model.Glob;
+import org.globsframework.shared.mem.tree.impl.write.StringRef;
 
 public interface StringAddrAccessor {
-    Glob get(String str);
+    StringRef get(String str);
 }

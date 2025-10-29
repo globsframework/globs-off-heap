@@ -61,4 +61,12 @@ public class GlobHandleAccess implements HandleAccess {
         Glob d = readContext.read(targetType, dataOffset);
         data.set(field, d);
     }
+
+    @Override
+    public void scanOffset(MemorySegment memorySegment, long offset, ReferenceOffset referenceOffset){
+        long dataOffset = (long) offsetVarHandle.get(memorySegment, offset);
+        if (dataOffset != -2 && dataOffset != -1) {
+            referenceOffset.onRef(targetType, dataOffset);
+        }
+    }
 }
