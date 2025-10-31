@@ -36,13 +36,23 @@ public class DateFieldHandleAccess implements HandleAccess {
     @Override
     public void save(Glob data, MemorySegment memorySegment, long offset, SaveContext saveContext) {
         final LocalDate date = data.get(dateField);
-        final long longDate = DateDataAccess.toLong(date.getYear(), date.getMonthValue(), date.getDayOfMonth());
-        longVarHandle.set(memorySegment, offset, longDate);
+        if (date == null) {
+            longVarHandle.set(memorySegment, offset, Long.MAX_VALUE);
+        }
+        else {
+            final long longDate = DateDataAccess.toLong(date.getYear(), date.getMonthValue(), date.getDayOfMonth());
+            longVarHandle.set(memorySegment, offset, longDate);
+        }
     }
 
     @Override
     public void readAtOffset(MutableGlob data, MemorySegment memorySegment, long offset, ReadContext readContext) {
         long longDate = (long) longVarHandle.get(memorySegment, offset);
-        data.set(dateField, DateDataAccess.toLocalDate(longDate));
+        if (longDate != Long.MAX_VALUE) {
+            data.set(dateField, DateDataAccess.toLocalDate(longDate));
+        }
+        else {
+            data.set(dateField, null);
+        }
     }
 }

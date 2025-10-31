@@ -7,6 +7,7 @@ import org.globsframework.core.metamodel.GlobType;
 import org.globsframework.core.metamodel.GlobTypeBuilder;
 import org.globsframework.core.metamodel.GlobTypeBuilderFactory;
 import org.globsframework.core.metamodel.fields.LongField;
+import org.globsframework.core.metamodel.fields.impl.DefaultGlobField;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
 import org.globsframework.shared.mem.hash.OffHeapHashAccess;
@@ -27,8 +28,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.*;
 
 class OffHeapHashServiceImplTest {
 
@@ -42,9 +42,11 @@ class OffHeapHashServiceImplTest {
 
 //        Map<FunctionalKey, Glob> data = new HashMap<>();
         List<Glob> globs = new ArrayList<>();
-        for (int i = 0; i < 10_000; i++) {
+        final int size = 10_000;
+        for (int i = 0; i < size; i++) {
             final MutableGlob set = Dummy1Type.TYPE.instantiate()
                     .set(Dummy1Type.id, i)
+                    .set(Dummy1Type.subObjectInline, Dummy2Type.create("inline " + i))
                     .set(Dummy1Type.subObject, Dummy2Type.create("sub " + i));
             globs.add(set);
 //            data.put(keyBuilder.create(set), set);
@@ -62,6 +64,8 @@ class OffHeapHashServiceImplTest {
             Glob glob1 = reader.get(proxy);
             assertNotNull(glob1);
             assertEquals("sub " + glob.get(Dummy1Type.id), glob1.get(Dummy1Type.subObject).get(Dummy2Type.name));
+            assertEquals("inline " + glob.get(Dummy1Type.id), glob1.get(Dummy1Type.subObjectInline).get(Dummy2Type.name));
+            DefaultGlobField.isSameGlob(Dummy1Type.TYPE, glob1, glob);
 //            final Glob glob2 = data.get(proxy);
 //            assertNotNull(glob2);
 //            assertEquals("sub " + glob.get(Dummy1Type.id), glob2.get(Dummy1Type.subObject).get(Dummy2Type.name));
@@ -180,7 +184,7 @@ class OffHeapHashServiceImplTest {
 
         final OffHeapUpdaterService updater = offHeapHashService.createUpdater(storagePath, Arena.ofShared());
 
-        int end = inserted + 100;
+        int end = inserted;
         int start = Math.max(0, end - 100);
         for (int i = start; i < end; i++) {
 //        int i = 100;

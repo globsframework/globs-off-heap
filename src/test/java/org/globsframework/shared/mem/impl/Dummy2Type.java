@@ -6,6 +6,7 @@ import org.globsframework.core.metamodel.GlobTypeBuilderFactory;
 import org.globsframework.core.metamodel.fields.GlobArrayField;
 import org.globsframework.core.metamodel.fields.IntegerField;
 import org.globsframework.core.metamodel.fields.StringField;
+import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
 import org.globsframework.shared.mem.model.HeapInline;
 import org.globsframework.shared.mem.model.HeapMaxElement;
@@ -35,6 +36,8 @@ public class Dummy2Type {
 
     public static MutableGlob create(String name) {
         return TYPE.instantiate().set(Dummy2Type.name, name)
+                .set(subObjectsInline, new Glob[]{Dummy3Type.create("inline data3")})
+                .set(subObjects, new Glob[]{Dummy3Type.create("data3")})
                 .set(aligned, 12);
     }
 }

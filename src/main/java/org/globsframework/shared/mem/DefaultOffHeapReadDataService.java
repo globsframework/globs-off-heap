@@ -39,6 +39,8 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
     private final IntHashMap<String> readStrings = new IntHashMap<>();
     private final Map<GlobType, TypeSegment> perGlobTypeMap = new HashMap<>();
     private byte[] cache = new byte[1024];
+    private final Map<GlobType, OffHeapTypeInfo> inlined = new HashMap<>();
+    private OffHeapTypeInfoAccessor offHeapTypeInfoMap;
 
 
     public DefaultOffHeapReadDataService(Path directory, Arena arena, GlobType mainDataType, OffHeapTypeInfoAccessor offHeapTypeInfoMap,
@@ -61,13 +63,17 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
                 this.stringBytesBuffer = null;
             }
 
-            this.offHeapTypeInfo = offHeapTypeInfoMap.get(mainDataType);
+            this.offHeapTypeInfoMap = offHeapTypeInfoMap;
+            this.offHeapTypeInfo = this.offHeapTypeInfoMap.get(mainDataType);
+
 
             TypeSegment mainSegment = null;
             for (GlobType globType : typesToSave) {
+                final RootOffHeapTypeInfo subOffHeapTypeInfo = offHeapTypeInfoMap.get(globType);
+                this.inlined.putAll(subOffHeapTypeInfo.inline());
                 final Path pathToFile = directory.resolve(DefaultOffHeapTreeService.createContentFileName(globType));
                 final TypeSegment typeSegment = loadMemorySegment(arena, FileChannel.MapMode.READ_ONLY,
-                        offsetHeader.offsetAtStart(globType), offHeapTypeInfoMap.get(globType).primary(),
+                        offsetHeader.offsetAtStart(globType), subOffHeapTypeInfo,
                         pathToFile);
                 if (typeSegment != null) {
                     if (globType != mainDataType) {
@@ -92,14 +98,14 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
         }
     }
 
-    public static TypeSegment loadMemorySegment(Arena arena,
-                                                FileChannel.MapMode openMode, int offsetForData, OffHeapTypeInfo subOffHeapTypeInfo, Path pathToFile) throws IOException {
+    public static TypeSegment loadMemorySegment(Arena arena, FileChannel.MapMode openMode, int offsetForData,
+                                                RootOffHeapTypeInfo subOffHeapTypeInfo, Path pathToFile) throws IOException {
         if (Files.exists(pathToFile)) {
             FileChannel fileChannel = FileChannel.open(pathToFile, StandardOpenOption.READ, openMode == FileChannel.MapMode.READ_ONLY ? StandardOpenOption.READ : StandardOpenOption.WRITE);
             final long size = fileChannel.size();
-            int count = Math.toIntExact(size / subOffHeapTypeInfo.byteSizeWithPadding());
+            int count = Math.toIntExact(size / subOffHeapTypeInfo.primary().byteSizeWithPadding());
             final MemorySegment subData = fileChannel.map(openMode, 0, size, arena);
-            return new TypeSegment(subData.asSlice(offsetForData), subData.asSlice(offsetForData, subOffHeapTypeInfo.byteSizeWithPadding() * count), fileChannel,
+            return new TypeSegment(subData.asSlice(offsetForData), subData.asSlice(offsetForData, subOffHeapTypeInfo.primary().byteSizeWithPadding() * count), fileChannel,
                     subOffHeapTypeInfo, count, size);
         }
         return null;
@@ -203,7 +209,7 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
             throw new RuntimeException("Bug " + targetType.getName() + " not found");
         }
         final MutableGlob instantiate = globInstantiator.newGlob(targetType);
-        for (HandleAccess handleAccess : typeSegment.offHeapTypeInfo().handleAccesses) {
+        for (HandleAccess handleAccess : typeSegment.offHeapTypeInfo().primary().handleAccesses) {
             handleAccess.readAtOffset(instantiate, typeSegment.segment(), dataOffset, this);
         }
         return instantiate;
@@ -234,7 +240,7 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
 
     @Override
     public OffHeapTypeInfo getOffHeapInlineTypeInfo(GlobType targetType) {
-        return perGlobTypeMap.get(targetType).offHeapTypeInfo();
+        return inlined.get(targetType);
     }
 
     public void close() {

@@ -55,7 +55,6 @@ public class DefaultOffHeapReadService implements OffHeapReadTreeService {
         readDataService.readAll(consumer);
     }
 
-
     public void readAll(DataConsumer consumer, Predicate<Field> onlyFields) throws IOException {
         readDataService.readAll(consumer, onlyFields);
     }

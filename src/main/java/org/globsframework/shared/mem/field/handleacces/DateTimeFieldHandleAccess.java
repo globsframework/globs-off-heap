@@ -51,6 +51,10 @@ public class DateTimeFieldHandleAccess implements HandleAccess {
     @Override
     public void save(Glob data, MemorySegment memorySegment, long offset, SaveContext saveContext) {
         final ZonedDateTime value = data.get(field);
+        if (value == null) {
+            dateVarHandle.set(offset, Integer.MIN_VALUE);
+            return;
+        }
         int val1 = (value.getYear() & 0xFFFFF) << 9 | value.getMonthValue() << 5 | value.getDayOfMonth();
         int val2 = value.getHour() << 12 | value.getMinute() << 6 | value.getSecond();
         int nano = value.getNano();
@@ -73,6 +77,10 @@ public class DateTimeFieldHandleAccess implements HandleAccess {
     @Override
     public void readAtOffset(MutableGlob data, MemorySegment memorySegment, long offset, ReadContext readContext) {
         int val1 = (int)dateVarHandle.get(memorySegment, offset);
+        if (val1 == Integer.MIN_VALUE) {
+            data.set(field, null);
+            return;
+        }
         int val2 = (int)timeVarHandle.get(memorySegment, offset);
         int nano =  (int)nanoVarHandle.get(memorySegment, offset);
         byte[] array = new byte[DefaultOffHeapTreeService.DATE_TIME_MAX_ZONE_ID_SIZE];

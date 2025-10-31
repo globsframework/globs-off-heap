@@ -30,7 +30,7 @@ public class Updater {
         final RootOffHeapTypeInfo rootOffHeapTypeInfo = new RootOffHeapTypeInfo(OffHeapTypeInfo.create(HashWriteIndex.PerData.TYPE, offHeapGlobTypeGroupLayout.getPrimaryGroupLayout()), Map.of());
 
         typeSegment = DefaultOffHeapReadDataService.loadMemorySegment(arena,
-                FileChannel.MapMode.READ_WRITE, 0, rootOffHeapTypeInfo.primary(),
+                FileChannel.MapMode.READ_WRITE, 0, rootOffHeapTypeInfo,
                 directory.resolve(DefaultOffHeapTreeService.createContentFileName(HashWriteIndex.PerData.TYPE, hashIndex.name())));
         maxElement = typeSegment.fileChannel().size() / HashReadIndex.byteSizeWithPadding;
     }

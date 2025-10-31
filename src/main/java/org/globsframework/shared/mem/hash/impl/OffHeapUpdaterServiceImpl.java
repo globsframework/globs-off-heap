@@ -58,7 +58,7 @@ class OffHeapUpdaterServiceImpl implements OffHeapUpdaterService {
                 final GlobType dataType = globTypeOffHeapTypeInfoWithFirstLayoutEntry.getKey();
                 final Path pathToFile = directory.resolve(DefaultOffHeapTreeService.createContentFileName(dataType));
                 final TypeSegment typeSegment = DefaultOffHeapReadDataService.loadMemorySegment(arena,
-                        FileChannel.MapMode.READ_WRITE, offsetHeader.offsetAtStart(dataType), offHeapTypeInfoMap.get(dataType).offHeapTypeInfo.primary(),
+                        FileChannel.MapMode.READ_WRITE, offsetHeader.offsetAtStart(dataType), offHeapTypeInfoMap.get(dataType).offHeapTypeInfo,
                         pathToFile);
                 if (typeSegment != null) {
                     freePositions.put(dataType, new SegmentPosition(globTypeOffHeapTypeInfoWithFirstLayoutEntry.getValue(), typeSegment));
@@ -124,11 +124,12 @@ class OffHeapUpdaterServiceImpl implements OffHeapUpdaterService {
         }
 
         public Long nexFree(long now) {
-            final long size = typeSegment.offHeapTypeInfo().byteSizeWithPadding();
+            final long size = typeSegment.offHeapTypeInfo().primary().byteSizeWithPadding();
             for (long i = 0; i < typeSegment.maxElementCount(); i++) {
-                long timestamp = (long) offHeapTypeInfo.freeIdHandle.get(typeSegment.segment(), i * size);
+                final long at = i * size;
+                long timestamp = (long) offHeapTypeInfo.freeIdHandle.get(typeSegment.segment(), at);
                 if (timestamp != 0 && (now - timestamp) > 1000) {
-                    return i * size;
+                    return at;
                 }
             }
             throw new RuntimeException("No free space for " + offHeapTypeInfo.offHeapTypeInfo.primary().type.getName());
@@ -177,21 +178,8 @@ class OffHeapUpdaterServiceImpl implements OffHeapUpdaterService {
             final GlobType typeToSave = globTypeIdentityHashMapEntry.getKey();
             final IdentityHashMap<Glob, Glob> dataToSave = globTypeIdentityHashMapEntry.getValue();
             final OffHeapTypeInfoWithFirstLayout offHeapTypeInfoWithFirstLayout = offHeapTypeInfoMap.get(typeToSave);
-            SaveContext saveContext =
-                    new SaveContext(dataOffsets, offHeapTypeInfoWithFirstLayout.offHeapTypeInfo.inline()::get, strOffsets::get);
-            final HandleAccess[] handleAccesses = offHeapTypeInfoWithFirstLayout.offHeapTypeInfo.primary().handleAccesses;
-            final TypeSegment typeSegment = freePositions.get(typeToSave).typeSegment;
-            final IdentityHashMap<Glob, Long> globLongIdentityHashMap = dataOffsets.get(typeToSave);
-            for (Glob glob : dataToSave.keySet()) {
-                final Long offset = globLongIdentityHashMap.get(glob);
-                if (((long)offHeapTypeInfoWithFirstLayout.freeIdHandle.get(typeSegment.segment(), offset)) == 0){
-                    throw new RuntimeException("Bug : place at " + offset + " is not free for " + typeToSave.getName());
-                }
-                offHeapTypeInfoWithFirstLayout.freeIdHandle.set(typeSegment.segment(), offset, 0);
-                for (HandleAccess handleAccess : handleAccesses) {
-                    handleAccess.save(glob, typeSegment.segment(), offset, saveContext);
-                }
-            }
+
+            saves(dataOffsets, offHeapTypeInfoWithFirstLayout, typeToSave, dataToSave);
         }
         final long mainDataOffset = dataOffsets.get(data.getType()).get(data);
 
@@ -213,24 +201,35 @@ class OffHeapUpdaterServiceImpl implements OffHeapUpdaterService {
         return 0;
     }
 
+    private void saves(Map<GlobType, IdentityHashMap<Glob, Long>> dataOffsets, OffHeapTypeInfoWithFirstLayout offHeapTypeInfoWithFirstLayout, GlobType typeToSave, IdentityHashMap<Glob, Glob> dataToSave) {
+        SaveContext saveContext =
+                new SaveContext(dataOffsets, offHeapTypeInfoWithFirstLayout.offHeapTypeInfo.inline()::get, strOffsets::get);
+        final HandleAccess[] handleAccesses = offHeapTypeInfoWithFirstLayout.offHeapTypeInfo.primary().handleAccesses;
+        final TypeSegment typeSegment = freePositions.get(typeToSave).typeSegment;
+        final IdentityHashMap<Glob, Long> globLongIdentityHashMap = dataOffsets.get(typeToSave);
+        for (Glob glob : dataToSave.keySet()) {
+            final Long offset = globLongIdentityHashMap.get(glob);
+            if (((long) offHeapTypeInfoWithFirstLayout.freeIdHandle.get(typeSegment.segment(), offset)) == 0){
+                throw new RuntimeException("Bug : place at " + offset + " is not free for " + typeToSave.getName());
+            }
+            offHeapTypeInfoWithFirstLayout.freeIdHandle.set(typeSegment.segment(), offset, 0);
+            for (HandleAccess handleAccess : handleAccesses) {
+                handleAccess.save(glob, typeSegment.segment(), offset, saveContext);
+            }
+        }
+    }
+
     record ToScan(GlobType globType, long dataOffset) {}
 
     private void extractOffsetToReset(long previousDataIndex) {
         Map<GlobType, Set<Long>> dataOffsetsToFree = new HashMap<>();
         List<ToScan> indexToScan = new ArrayList<>();
         indexToScan.add(new ToScan(type, previousDataIndex));
+        final FreeReferenceOffset referenceOffset = new FreeReferenceOffset(dataOffsetsToFree, indexToScan);
         while (!indexToScan.isEmpty()){
             ToScan toScan = indexToScan.removeFirst();
             for (HandleAccess handleAccess : offHeapTypeInfoMap.get(toScan.globType()).offHeapTypeInfo.primary().handleAccesses) {
-                handleAccess.scanOffset(freePositions.get(type).typeSegment.segment(), toScan.dataOffset(), new HandleAccess.ReferenceOffset() {
-                    @Override
-                    public void onRef(GlobType type, long offset) {
-                        if (dataOffsetsToFree.computeIfAbsent(type, k -> new HashSet<>())
-                                .add(offset)) {
-                            indexToScan.add(new ToScan(type, offset));
-                        }
-                    }
-                });
+                handleAccess.scanOffset(freePositions.get(toScan.globType()).typeSegment.segment(), toScan.dataOffset(), referenceOffset);
             }
         }
 
@@ -240,6 +239,24 @@ class OffHeapUpdaterServiceImpl implements OffHeapUpdaterService {
             globTypeListEntry.getValue().forEach(offset -> {
                 segmentPosition.setToFree(offset, now);
             });
+        }
+    }
+
+    private static class FreeReferenceOffset implements HandleAccess.ReferenceOffset {
+        private final Map<GlobType, Set<Long>> dataOffsetsToFree;
+        private final List<ToScan> indexToScan;
+
+        public FreeReferenceOffset(Map<GlobType, Set<Long>> dataOffsetsToFree, List<ToScan> indexToScan) {
+            this.dataOffsetsToFree = dataOffsetsToFree;
+            this.indexToScan = indexToScan;
+        }
+
+        @Override
+        public void onRef(GlobType type, long offset) {
+            if (dataOffsetsToFree.computeIfAbsent(type, k -> new HashSet<>())
+                    .add(offset)) {
+                indexToScan.add(new ToScan(type, offset));
+            }
         }
     }
 }
