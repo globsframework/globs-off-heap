@@ -4,7 +4,9 @@ import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.model.Glob;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import java.util.function.Predicate;
 
 public interface OffHeapReadTreeService extends AutoCloseable {
@@ -20,14 +22,16 @@ public interface OffHeapReadTreeService extends AutoCloseable {
 
     int read(OffHeapRefs offHeapRef, DataConsumer consumer);
 
-    void warmup();
+    // read 
+    void warmup(DataConsumer dataConsumer);
 
-    default Collection<Glob> read(OffHeapRefs offHeapRef){
+    default Collection<Glob> read(OffHeapRefs offHeapRef) {
         List<Glob> globs = new ArrayList<>(offHeapRef.offset().size());
         read(offHeapRef, new DataConsumer() {
             @Override
-            public void accept(Glob glob) {
+            public boolean accept(Glob glob) {
                 globs.add(glob);
+                return true;
             }
         });
         return globs;

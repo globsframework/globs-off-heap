@@ -123,8 +123,14 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
     }
 
     @Override
-    public void warmup() {
-        readAll(glob -> {}, this);
+    public void warmup(DataConsumer dataConsumer) {
+        for (int i = 0; i < 1000; i++) { // to prevent infinite loop
+            long offset = (long) (Math.random() * count) * offHeapTypeInfo.primary().byteSizeWithPadding();
+            final Glob read = read(offset);
+            if (!dataConsumer.accept(read)) {
+                return;
+            }
+        }
     }
 
     @Override

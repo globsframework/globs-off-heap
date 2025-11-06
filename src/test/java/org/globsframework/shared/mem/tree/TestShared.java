@@ -26,6 +26,7 @@ import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class TestShared {
 //    public static final int SIZE = 10_000_000;
@@ -133,7 +134,9 @@ public class TestShared {
                 .set(DummyObject1.data5, i % 2 == 0)
                 .set(DummyObject1.data6, (long) i * i)
                 .set(DummyObject1.fixSizeStrAllowTruncate, "\u24FF\uFD34zdfeéd32" + i) // 10 chars with not latin1 char.
-                .set(DummyObject1.fixSizeStrNoTruncate, "\u63FF\uAF34" + i);  // 22 chars with not latin1 char
+                .set(DummyObject1.fixSizeStrNoTruncate, "\u63FF\uAF34" + i)
+                .set(DummyObject1.fixBigSizeStrNoTruncate, "a".repeat(190))
+                ;  // 22 chars with not latin1 char
     }
 
     @Test
@@ -165,7 +168,8 @@ public class TestShared {
         OffHeapReadTreeService readHeapService = offHeapService.createRead(
                 Path.of("/tmp/test"), arena);
 
-        readHeapService.warmup();
+        AtomicInteger atomicInteger = new AtomicInteger(10);
+        readHeapService.warmup(glob -> atomicInteger.decrementAndGet() == 0);
 
         List<Glob> readData = new ArrayList<>();
         readHeapService.readAll(glob -> readData.add(glob));
@@ -198,7 +202,7 @@ public class TestShared {
                     final OffHeapRefs offHeapRefs = readOffHeapMultiIndex.find(functionalKey);
                     Assertions.assertNotNull(offHeapRefs, functionalKey.toString());
                     Map<Glob, Glob> data = new IdentityHashMap<>();
-                    Assertions.assertEquals(SIZE / MODULO, readHeapService.read(offHeapRefs, g -> data.put(g, g)));
+                    Assertions.assertEquals(SIZE / MODULO, readHeapService.read(offHeapRefs, g -> data.put(g, g) == null));
                     Assertions.assertEquals(SIZE / MODULO, data.size());
                     for (Glob value : data.values()) {
                         Assertions.assertEquals(functionalKey.get(DummyObject1.name), value.get(DummyObject1.name));
@@ -234,9 +238,7 @@ public class TestShared {
     private static void selectRead(OffHeapReadTreeService readHeapService, List<Glob> globs) throws IOException {
         List<Glob> received = new ArrayList<>();
         final long startRead = System.currentTimeMillis();
-        readHeapService.readAll(glob -> {
-            received.add(glob);
-        }, Set.of(DummyObject1.val1, DummyObject1.data1)::contains);
+        readHeapService.readAll(received::add, Set.of(DummyObject1.val1, DummyObject1.data1)::contains);
         System.out.println("Read " + (System.currentTimeMillis() - startRead) + " ms");
 
         Assertions.assertEquals(globs.size(), received.size());
@@ -248,9 +250,7 @@ public class TestShared {
     private static void loopRead(OffHeapReadTreeService readHeapService, List<Glob> globs) throws IOException {
         List<Glob> received = new ArrayList<>();
         final long startRead = System.currentTimeMillis();
-        readHeapService.readAll(glob -> {
-            received.add(glob);
-        });
+        readHeapService.readAll(received::add);
         System.out.println("Read " + (System.currentTimeMillis() - startRead) + " ms");
 
         Assertions.assertEquals(globs.size(), received.size());
@@ -292,6 +292,9 @@ public class TestShared {
         @MaxSize_(value = 22, allow_truncate = false)
         public static final StringField fixSizeStrNoTruncate;
 
+        @MaxSize_(value = 200, allow_truncate = false)
+        public static final StringField fixBigSizeStrNoTruncate;
+
         static {
             final GlobTypeBuilder globTypeBuilder = GlobTypeBuilderFactory.create("DummyObject1");
             TYPE = globTypeBuilder.unCompleteType();
@@ -308,6 +311,7 @@ public class TestShared {
             maxValue = globTypeBuilder.declareIntegerField("maxValue");
             fixSizeStrAllowTruncate = globTypeBuilder.declareStringField("fixSizeStrAllowTruncate", MaxSize.create(13, true));
             fixSizeStrNoTruncate = globTypeBuilder.declareStringField("fixSizeStrNoTruncate", MaxSize.create(22, false));
+            fixBigSizeStrNoTruncate = globTypeBuilder.declareStringField("fixBigSizeStrNoTruncate", MaxSize.create(200, false));
             globTypeBuilder.complete();
         }
     }

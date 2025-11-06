@@ -1,8 +1,10 @@
 package org.globsframework.shared.mem.field.dataaccess;
 
+import org.globsframework.core.metamodel.annotations.MaxSize;
 import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.metamodel.fields.StringField;
 import org.globsframework.core.model.FieldValues;
+import org.globsframework.shared.mem.field.handleacces.FixSizeStringFieldHandleAccess;
 import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
 import org.globsframework.shared.mem.tree.impl.StringAccessorByAddress;
 
@@ -14,22 +16,27 @@ import java.lang.invoke.VarHandle;
 public class FixSizeStringDataAccess implements DataAccess {
     private final StringField field;
     private final VarHandle varStrHandle;
-    private final VarHandle varLenHandle;
+    private final FixSizeStringFieldHandleAccess.ReadLen readLen;
 
     public FixSizeStringDataAccess(StringField field, VarHandle varLenHandle, VarHandle varStrHandle) {
         this.field = field;
-        this.varLenHandle = varLenHandle;
         this.varStrHandle = varStrHandle;
+        final int maxSize = field.getAnnotation(MaxSize.KEY).getNotNull(MaxSize.VALUE);
+        if (maxSize < FixSizeStringFieldHandleAccess.ByteLenAccess.MAX_LEN) {
+            readLen = new FixSizeStringFieldHandleAccess.ByteLenAccess(varLenHandle);
+        }
+        else {
+            readLen = new FixSizeStringFieldHandleAccess.IntLenAccess(varLenHandle);
+        }
     }
 
     public static DataAccess create(GroupLayout groupLayout, StringField field) {
-        return new FixSizeStringDataAccess(field,
-                groupLayout.arrayElementVarHandle(MemoryLayout.PathElement.groupElement(field.getName() + DefaultOffHeapTreeService.STRING_SUFFIX_LEN)),
-                groupLayout.arrayElementVarHandle(
-                        MemoryLayout.PathElement.groupElement(field.getName()),
-                        MemoryLayout.PathElement.sequenceElement()));
+        final VarHandle varLenHandle = groupLayout.arrayElementVarHandle(MemoryLayout.PathElement.groupElement(field.getName() + DefaultOffHeapTreeService.STRING_SUFFIX_LEN));
+        final VarHandle varStrHandle = groupLayout.arrayElementVarHandle(
+                MemoryLayout.PathElement.groupElement(field.getName()),
+                MemoryLayout.PathElement.sequenceElement());
+        return new FixSizeStringDataAccess(field, varLenHandle, varStrHandle);
     }
-
 
     @Override
     public Field getField() {
@@ -37,9 +44,10 @@ public class FixSizeStringDataAccess implements DataAccess {
     }
 
     @Override
-    public int compare(FieldValues functionalKey, MemorySegment memorySegment, long index, StringAccessorByAddress stringAccessorByAddress) {
+    public int compare(FieldValues functionalKey, MemorySegment memorySegment, long index,
+                       StringAccessorByAddress stringAccessorByAddress) {
         final String s = functionalKey.get(field);
-        int len = (int) varLenHandle.get(memorySegment, 0L, index);
+        int len = readLen.readLenArray(memorySegment, index);
         if ((s == null) && (len == -1)) {
             return 0;
         }
@@ -49,11 +57,15 @@ public class FixSizeStringDataAccess implements DataAccess {
         if (len == -1) {
             return 1;
         }
-        // TODO : apply same code as String.compare?
-        StringBuilder stringBuilder = new StringBuilder(len);
-        for (int i = 0; i < len; i++) {
-            stringBuilder.append((char) varStrHandle.get(memorySegment, 0L, index, i));
+        int minLen = Math.min(len, s.length());
+        for (int i = 0; i < minLen; i++) {
+            final char c = (char) varStrHandle.get(memorySegment, 0L, index, i);
+            final char c1 = s.charAt(i);
+            if (c1 != c) {
+                return c1 - c;
+            }
         }
-        return s.compareTo(stringBuilder.toString());
+        return Integer.compare(s.length(), len);
+
     }
 }

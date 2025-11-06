@@ -1103,7 +1103,7 @@ public class SearchTest {
                             .set(nameField, name)
                             .set(ageField, age).create());
                     Map<Glob, Glob> actual = new IdentityHashMap<>();
-                    readService.read(refs, g ->actual.put(g, g));
+                    readService.read(refs, g -> actual.put(g, g) == null);
                     Assertions.assertEquals(10, actual.size(), "Wrong number of results for age  " + (20 + i));
                     for (Glob value : actual.values()) {
                         Assertions.assertEquals(name, value.get(nameField));
@@ -1209,7 +1209,7 @@ public class SearchTest {
                             .set(nameField, name)
                             .set(ageField, age).create());
                     Map<Glob, Glob> actual = new IdentityHashMap<>();
-                    readService.read(refs, g ->actual.put(g, g));
+                    readService.read(refs, g -> actual.put(g, g) == null);
                     Assertions.assertEquals(10, actual.size(), "Wrong number of results for age  " + (20 + i));
                     for (Glob value : actual.values()) {
                         Assertions.assertEquals(name, value.get(nameField));

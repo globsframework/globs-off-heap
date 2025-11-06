@@ -1,4 +1,5 @@
 package org.globsframework.shared.mem.tree;
+
 import org.globsframework.core.functional.FunctionalKeyBuilder;
 import org.globsframework.core.functional.FunctionalKeyBuilderFactory;
 import org.globsframework.core.metamodel.GlobType;
@@ -14,7 +15,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 public class OffHeapExample {
     public static void main(String[] args) throws IOException {
@@ -79,14 +79,18 @@ public class OffHeapExample {
 
             // 8.4 Find people by name
             OffHeapRefs refs = readNameIndex.find(keyBuilder.create().set(name, "Person 50").create());
-            readService.read(refs, glob ->
-                    System.out.println("ID: " + glob.get(id) + ", Name: " + glob.get(name) + ", Age: " + glob.get(age))
+            readService.read(refs, glob -> {
+                        System.out.println("ID: " + glob.get(id) + ", Name: " + glob.get(name) + ", Age: " + glob.get(age));
+                        return true;
+                    }
             );
 
             // 8.5 Read all data
             System.out.println("\nAll people:");
-            readService.readAll(glob ->
-                    System.out.println("ID: " + glob.get(id) + ", Name: " + glob.get(name) + ", Age: " + glob.get(age))
+            readService.readAll(glob -> {
+                        System.out.println("ID: " + glob.get(id) + ", Name: " + glob.get(name) + ", Age: " + glob.get(age));
+                        return true;
+                    }
             );
         }
     }

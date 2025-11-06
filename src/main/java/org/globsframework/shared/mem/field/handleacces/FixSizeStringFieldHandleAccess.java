@@ -16,18 +16,31 @@ import java.lang.invoke.VarHandle;
 
 public class FixSizeStringFieldHandleAccess implements HandleAccess {
     private final StringField stringField;
-    private final VarHandle varLenHandle;
     private final VarHandle varStrHandle;
     private final int maxSize;
     private final boolean canTruncate;
+    private final ReadLen lenAccess;
 
     FixSizeStringFieldHandleAccess(StringField stringField, VarHandle varLenHandle, VarHandle varStrHandle) {
         this.stringField = stringField;
-        this.varLenHandle = varLenHandle;
         this.varStrHandle = varStrHandle;
         final Glob maxSize = stringField.getAnnotation(MaxSize.KEY);
         this.maxSize = maxSize.getNotNull(MaxSize.VALUE);
         canTruncate = maxSize.isTrue(MaxSize.ALLOW_TRUNCATE);
+        if (this.maxSize < ByteLenAccess.MAX_LEN) {
+            lenAccess = new ByteLenAccess(varLenHandle);
+        }
+        else {
+            lenAccess = new IntLenAccess(varLenHandle);
+        }
+
+    }
+
+
+    public interface ReadLen {
+        int readLen(MemorySegment memorySegment, long index);
+        int readLenArray(MemorySegment memorySegment, long index);
+        void writeLen(MemorySegment memorySegment, long index, int len);
     }
 
     public static FixSizeStringFieldHandleAccess create(GroupLayout groupLayout, StringField stringField) {
@@ -47,7 +60,7 @@ public class FixSizeStringFieldHandleAccess implements HandleAccess {
     public void save(Glob data, MemorySegment memorySegment, long offset, SaveContext saveContext) {
         final String str = data.get(stringField);
         if (str == null) {
-            varLenHandle.set(memorySegment, offset, -1);
+            lenAccess.writeLen(memorySegment, offset, -1);
         }
         else {
             if (str.length() > this.maxSize) {
@@ -56,7 +69,7 @@ public class FixSizeStringFieldHandleAccess implements HandleAccess {
                 }
             }
             int len = Math.min(str.length(), this.maxSize);
-            varLenHandle.set(memorySegment, offset, len);
+            lenAccess.writeLen(memorySegment, offset, len);
             for (int j = 0; j < len; j++) {
                 varStrHandle.set(memorySegment, offset, j, str.charAt(j));
             }
@@ -65,7 +78,7 @@ public class FixSizeStringFieldHandleAccess implements HandleAccess {
 
     @Override
     public void readAtOffset(MutableGlob data, MemorySegment memorySegment, long offset, ReadContext readContext) {
-        int len = (int) varLenHandle.get(memorySegment, offset);
+        int len = lenAccess.readLen(memorySegment, offset);
         if (len == -1) {
             data.set(stringField, null);
         }
@@ -76,6 +89,53 @@ public class FixSizeStringFieldHandleAccess implements HandleAccess {
                 sb.append(c);
             }
             data.set(stringField, sb.toString());
+        }
+    }
+
+    public static class ByteLenAccess implements ReadLen {
+        public static int MAX_LEN = 254;
+        private final VarHandle varLenHandle;
+
+        public ByteLenAccess(VarHandle varLenHandle) {
+            this.varLenHandle = varLenHandle;
+        }
+
+        @Override
+        public int readLen(MemorySegment memorySegment, long index) {
+            return (((byte) varLenHandle.get(memorySegment, index)) & 0xFF) - 1;
+        }
+
+        @Override
+        public int readLenArray(MemorySegment memorySegment, long index) {
+            return (((byte) varLenHandle.get(memorySegment, 0L, index)) & 0xFF) - 1;
+        }
+
+        @Override
+        public void writeLen(MemorySegment memorySegment, long index, int len) {
+            varLenHandle.set(memorySegment,index, (byte) (len + 1));
+        }
+    }
+
+    public static class IntLenAccess implements ReadLen {
+        private final VarHandle varLenHandle;
+
+        public IntLenAccess(VarHandle varLenHandle) {
+            this.varLenHandle = varLenHandle;
+        }
+
+        @Override
+        public int readLen(MemorySegment memorySegment, long index) {
+            return (int) varLenHandle.get(memorySegment, index);
+        }
+
+        @Override
+        public int readLenArray(MemorySegment memorySegment, long index) {
+            return (int) varLenHandle.get(memorySegment, 0L, index);
+        }
+
+        @Override
+        public void writeLen(MemorySegment memorySegment, long index, int len) {
+            varLenHandle.set(memorySegment,index, len);
         }
     }
 }

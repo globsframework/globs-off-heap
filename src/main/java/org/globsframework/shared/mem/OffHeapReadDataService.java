@@ -21,7 +21,7 @@ public interface OffHeapReadDataService extends StringAccessorByAddress {
 
     void readAll(DataConsumer consumer, Predicate<Field> onlyFields) throws IOException;
 
-    void warmup();
+    void warmup(DataConsumer dataConsumer);
 
     void close();
 

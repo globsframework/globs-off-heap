@@ -47,8 +47,8 @@ public class DefaultOffHeapReadService implements OffHeapReadTreeService {
         return readDataService.read(offHeapRef.offset().getOffset(), consumer);
     }
 
-    public void warmup() {
-        readDataService.warmup();
+    public void warmup(DataConsumer dataConsumer) {
+        readDataService.warmup(dataConsumer);
     }
 
     public void readAll(DataConsumer consumer) throws IOException {

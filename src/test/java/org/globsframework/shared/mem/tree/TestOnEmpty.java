@@ -43,8 +43,9 @@ public class TestOnEmpty {
                 Path.of("/tmp/testEmpty"), arena);
         readHeapService.readAll(new DataConsumer() {
             @Override
-            public void accept(Glob glob) {
+            public boolean accept(Glob glob) {
                 Assertions.fail("Should not be called");
+                return true;
             }
         });
 
@@ -60,6 +61,7 @@ public class TestOnEmpty {
         Assertions.assertEquals(0, offHeapRefs.size());
         readHeapService.read(offHeapRefs, glob -> {
             Assertions.fail("Should not be called");
+            return true;
         });
     }
 }
