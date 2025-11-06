@@ -6,10 +6,13 @@ import org.globsframework.core.metamodel.annotations.MaxSize;
 import org.globsframework.core.metamodel.fields.*;
 import org.globsframework.core.model.Glob;
 import org.globsframework.shared.mem.field.handleacces.FixSizeStringFieldHandleAccess;
+import org.globsframework.shared.mem.model.Heap7BitsString;
 import org.globsframework.shared.mem.model.HeapInline;
 import org.globsframework.shared.mem.model.HeapMaxElement;
 
-import java.lang.foreign.*;
+import java.lang.foreign.GroupLayout;
+import java.lang.foreign.MemoryLayout;
+import java.lang.foreign.ValueLayout;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -41,20 +44,24 @@ class GroupLayoutFieldVisitor extends FieldVisitor.AbstractWithErrorVisitor {
     public void visitString(StringField field) {
         if (field.hasAnnotation(MaxSize.KEY)) {
             final int maxSize = field.getAnnotation(MaxSize.KEY).getNotNull(MaxSize.VALUE);
+            final boolean is7BitString = field.hasAnnotation(Heap7BitsString.UNIQUE_KEY);
             if (maxSize < FixSizeStringFieldHandleAccess.ByteLenAccess.MAX_LEN) {
                 fieldsLayout.add(ValueLayout.JAVA_BYTE.withName(field.getName() + DefaultOffHeapTreeService.STRING_SUFFIX_LEN));
                 currentPos++;
-                addPadding(2);
+                addPadding(is7BitString ? 1 : 2);
             } else {
                 addPadding(4);
                 fieldsLayout.add(ValueLayout.JAVA_INT.withName(field.getName() + DefaultOffHeapTreeService.STRING_SUFFIX_LEN));
                 currentPos += 4;
             }
-            fieldsLayout.add(MemoryLayout.sequenceLayout(maxSize, ValueLayout.JAVA_CHAR)
-                    .withName(field.getName()));
-            currentPos += maxSize * 2;
-        }
-        else {
+            if (is7BitString) {
+                fieldsLayout.add(MemoryLayout.sequenceLayout(maxSize, ValueLayout.JAVA_BYTE).withName(field.getName()));
+                currentPos += maxSize;
+            } else {
+                fieldsLayout.add(MemoryLayout.sequenceLayout(maxSize, ValueLayout.JAVA_CHAR).withName(field.getName()));
+                currentPos += maxSize * 2;
+            }
+        } else {
             addPadding(4);
             fieldsLayout.add(ValueLayout.JAVA_INT.withName(field.getName() + DefaultOffHeapTreeService.STRING_SUFFIX_LEN));
             fieldsLayout.add(ValueLayout.JAVA_INT.withName(field.getName() + DefaultOffHeapTreeService.STRING_SUFFIX_ADDR));
@@ -86,8 +93,7 @@ class GroupLayoutFieldVisitor extends FieldVisitor.AbstractWithErrorVisitor {
             final MemoryLayout layout = layoutAccessor.getLayout(field.getTargetType());
             fieldsLayout.add(layout.withName(field.getName()));
             currentPos += (int) layout.byteSize();
-        }
-        else {
+        } else {
             addPadding(8);
             fieldsLayout.add(ValueLayout.JAVA_LONG.withName(field.getName())); // offset
             currentPos += 8;
@@ -106,8 +112,7 @@ class GroupLayoutFieldVisitor extends FieldVisitor.AbstractWithErrorVisitor {
             addPadding(8); // layout.byteAlignment();
             fieldsLayout.add(MemoryLayout.sequenceLayout(size, layout).withName(field.getName()));
             currentPos += size * (int) layout.byteSize(); // check : il faut que byteSize soit aligné
-        }
-        else {
+        } else {
             addPadding(8);
             fieldsLayout.add(MemoryLayout.sequenceLayout(size, ValueLayout.JAVA_LONG).withName(field.getName()));
             currentPos += 8 * size;
@@ -149,7 +154,7 @@ class GroupLayoutFieldVisitor extends FieldVisitor.AbstractWithErrorVisitor {
                         DefaultOffHeapTreeService.DATE_TIME_MAX_ZONE_ID_SIZE, ValueLayout.JAVA_BYTE)
                 .withName(field.getName() + DefaultOffHeapTreeService.DATE_TIME_ZONE_ID_SUFFIX));
         currentPos += 4 + 4 + 4 + DefaultOffHeapTreeService.DATE_TIME_MAX_ZONE_ID_SIZE;
-     }
+    }
 
     public void visitIntegerArray(IntegerArrayField field) throws Exception {
         addPadding(4);

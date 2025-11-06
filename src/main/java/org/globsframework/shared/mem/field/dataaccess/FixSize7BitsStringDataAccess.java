@@ -5,42 +5,24 @@ import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.metamodel.fields.StringField;
 import org.globsframework.core.model.FieldValues;
 import org.globsframework.shared.mem.field.handleacces.FixSizeStringFieldHandleAccess;
-import org.globsframework.shared.mem.model.Heap7BitsString;
-import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
 import org.globsframework.shared.mem.tree.impl.StringAccessorByAddress;
 
-import java.lang.foreign.GroupLayout;
-import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.invoke.VarHandle;
 
-public class FixSizeStringDataAccess implements DataAccess {
+public class FixSize7BitsStringDataAccess implements DataAccess {
     private final StringField field;
     private final VarHandle varStrHandle;
     private final FixSizeStringFieldHandleAccess.ReadLen readLen;
 
-    public FixSizeStringDataAccess(StringField field, VarHandle varLenHandle, VarHandle varStrHandle) {
+    public FixSize7BitsStringDataAccess(StringField field, VarHandle varLenHandle, VarHandle varStrHandle) {
         this.field = field;
         this.varStrHandle = varStrHandle;
         final int maxSize = field.getAnnotation(MaxSize.KEY).getNotNull(MaxSize.VALUE);
         if (maxSize < FixSizeStringFieldHandleAccess.ByteLenAccess.MAX_LEN) {
             readLen = new FixSizeStringFieldHandleAccess.ByteLenAccess(varLenHandle);
-        }
-        else {
+        } else {
             readLen = new FixSizeStringFieldHandleAccess.IntLenAccess(varLenHandle);
-        }
-    }
-
-    public static DataAccess create(GroupLayout groupLayout, StringField field) {
-        final VarHandle varLenHandle = groupLayout.arrayElementVarHandle(MemoryLayout.PathElement.groupElement(field.getName() + DefaultOffHeapTreeService.STRING_SUFFIX_LEN));
-        final VarHandle varStrHandle = groupLayout.arrayElementVarHandle(
-                MemoryLayout.PathElement.groupElement(field.getName()),
-                MemoryLayout.PathElement.sequenceElement());
-        if (field.hasAnnotation(Heap7BitsString.UNIQUE_KEY)) {
-            return new FixSize7BitsStringDataAccess(field, varLenHandle, varStrHandle);
-        }
-        else {
-            return new FixSizeStringDataAccess(field, varLenHandle, varStrHandle);
         }
     }
 
@@ -65,7 +47,7 @@ public class FixSizeStringDataAccess implements DataAccess {
         }
         int minLen = Math.min(len, s.length());
         for (int i = 0; i < minLen; i++) {
-            final char c = (char) varStrHandle.get(memorySegment, 0L, index, i);
+            final char c = (char) (byte) varStrHandle.get(memorySegment, 0L, index, i);
             final char c1 = s.charAt(i);
             if (c1 != c) {
                 return c1 - c;

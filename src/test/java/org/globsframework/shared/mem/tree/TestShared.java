@@ -13,6 +13,7 @@ import org.globsframework.core.metamodel.annotations.MaxSize_;
 import org.globsframework.core.metamodel.fields.*;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
+import org.globsframework.shared.mem.model.Heap7BitsString;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -29,7 +30,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class TestShared {
-//    public static final int SIZE = 10_000_000;
+    //    public static final int SIZE = 10_000_000;
 //    public static final int MODULO = 1_000_000;
     public static final int SIZE = 500_000;
     public static final int MODULO = 50_000;
@@ -134,7 +135,8 @@ public class TestShared {
                 .set(DummyObject1.data5, i % 2 == 0)
                 .set(DummyObject1.data6, (long) i * i)
                 .set(DummyObject1.fixSizeStrAllowTruncate, "\u24FF\uFD34zdfeéd32" + i) // 10 chars with not latin1 char.
-                .set(DummyObject1.fixSizeStrNoTruncate, "\u63FF\uAF34" + i)
+                .set(DummyObject1.fixSizeStrNoTruncate, "\u63FF\uAF34" + (i % 10))
+                .set(DummyObject1.fix7BitsSizeStr, "afds" + i)
                 .set(DummyObject1.fixBigSizeStrNoTruncate, "a".repeat(190))
                 ;  // 22 chars with not latin1 char
     }
@@ -149,6 +151,7 @@ public class TestShared {
         final FunctionalKeyBuilder uniqueFunctionalKeyBuilder =
                 FunctionalKeyBuilderFactory.create(DummyObject1.TYPE)
                         .add(DummyObject1.fixSizeStrNoTruncate)
+                        .add(DummyObject1.fix7BitsSizeStr)
                         .create();
 
         OffHeapTreeService offHeapService = OffHeapTreeService.create(DummyObject1.TYPE);
@@ -185,7 +188,10 @@ public class TestShared {
     }
 
     private static void check(ReadOffHeapUniqueIndex index, FunctionalKeyBuilder uniqueFunctionalKeyBuilder, OffHeapReadTreeService readHeapService, int pos) {
-        final OffHeapRef offHeapRef = index.find(uniqueFunctionalKeyBuilder.create().set(DummyObject1.fixSizeStrNoTruncate, "\u63FF\uAF34" + pos).getShared());
+        final OffHeapRef offHeapRef = index.find(uniqueFunctionalKeyBuilder.create()
+                .set(DummyObject1.fixSizeStrNoTruncate, "\u63FF\uAF34" + (pos % 10))
+                .set(DummyObject1.fix7BitsSizeStr, "afds" + pos)
+                .getShared());
         Assertions.assertNotNull(offHeapRef);
         final Glob read = readHeapService.read(offHeapRef);
         Assertions.assertEquals(pos, read.get(DummyObject1.val1).intValue());
@@ -227,7 +233,7 @@ public class TestShared {
                 Glob glob = readHeapService.read(offHeapRef);
                 Assertions.assertNotNull(glob);
                 Assertions.assertEquals(10 + (glob.get(DummyObject1.val1)) % 100, glob.get(DummyObject1.maxValue).intValue(), "at " + i);
-                Assertions.assertEquals( "a name " + ((glob.get(DummyObject1.val1)) % MODULO), glob.get(DummyObject1.name));
+                Assertions.assertEquals("a name " + ((glob.get(DummyObject1.val1)) % MODULO), glob.get(DummyObject1.name));
             }
         }
         long endIndex = System.nanoTime();
@@ -286,6 +292,9 @@ public class TestShared {
 
         public static final LongField data6;
 
+        @MaxSize_(value = 15)
+        public static final StringField fix7BitsSizeStr;
+
         @MaxSize_(value = 13, allow_truncate = true)
         public static final StringField fixSizeStrAllowTruncate;
 
@@ -312,6 +321,7 @@ public class TestShared {
             fixSizeStrAllowTruncate = globTypeBuilder.declareStringField("fixSizeStrAllowTruncate", MaxSize.create(13, true));
             fixSizeStrNoTruncate = globTypeBuilder.declareStringField("fixSizeStrNoTruncate", MaxSize.create(22, false));
             fixBigSizeStrNoTruncate = globTypeBuilder.declareStringField("fixBigSizeStrNoTruncate", MaxSize.create(200, false));
+            fix7BitsSizeStr = globTypeBuilder.declareStringField("fix7BitsSizeStr", MaxSize.create(15), Heap7BitsString.UNIQUE_GLOB);
             globTypeBuilder.complete();
         }
     }

@@ -5,6 +5,7 @@ import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.metamodel.fields.StringField;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
+import org.globsframework.shared.mem.model.Heap7BitsString;
 import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
 import org.globsframework.shared.mem.tree.impl.read.ReadContext;
 import org.globsframework.shared.mem.tree.impl.write.SaveContext;
@@ -43,12 +44,16 @@ public class FixSizeStringFieldHandleAccess implements HandleAccess {
         void writeLen(MemorySegment memorySegment, long index, int len);
     }
 
-    public static FixSizeStringFieldHandleAccess create(GroupLayout groupLayout, StringField stringField) {
+    public static HandleAccess create(GroupLayout groupLayout, StringField stringField) {
         final VarHandle lenHandle = groupLayout.varHandle(MemoryLayout.PathElement.groupElement(stringField.getName() + DefaultOffHeapTreeService.STRING_SUFFIX_LEN));
         final VarHandle strHandle =
                 groupLayout.varHandle(MemoryLayout.PathElement.groupElement(stringField.getName()),
                         MemoryLayout.PathElement.sequenceElement());
-        return new FixSizeStringFieldHandleAccess(stringField, lenHandle, strHandle);
+        if (stringField.hasAnnotation(Heap7BitsString.UNIQUE_KEY)) {
+            return new FixSize7BitsStringFieldHandleAccess(stringField, lenHandle, strHandle);
+        }else {
+            return new FixSizeStringFieldHandleAccess(stringField, lenHandle, strHandle);
+        }
     }
 
     @Override
