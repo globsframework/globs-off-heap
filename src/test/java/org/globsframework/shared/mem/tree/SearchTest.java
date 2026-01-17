@@ -1028,11 +1028,10 @@ public class SearchTest {
     @Test
     void searchInManyTest() throws IOException {
         GlobTypeBuilder typeBuilder = GlobTypeBuilderFactory.create("Person");
-        GlobType personType = typeBuilder.unCompleteType();
         IntegerField idField = typeBuilder.declareIntegerField("id");
         StringField nameField = typeBuilder.declareStringField("name");
         IntegerField ageField = typeBuilder.declareIntegerField("age");
-        typeBuilder.complete();
+        GlobType personType = typeBuilder.build();
 
         // 2. Create some data
         List<Glob> people = new ArrayList<>();
@@ -1134,11 +1133,10 @@ public class SearchTest {
     @Test
     void searchInUniqueTest() throws IOException {
         GlobTypeBuilder typeBuilder = GlobTypeBuilderFactory.create("Person");
-        GlobType personType = typeBuilder.unCompleteType();
         IntegerField idField = typeBuilder.declareIntegerField("id");
         StringField nameField = typeBuilder.declareStringField("name");
         IntegerField ageField = typeBuilder.declareIntegerField("age");
-        typeBuilder.complete();
+        GlobType personType = typeBuilder.build();
 
         // 2. Create some data
         List<Glob> people = new ArrayList<>();
@@ -1240,11 +1238,10 @@ public class SearchTest {
     @Test
     void searchSimple() throws IOException {
         GlobTypeBuilder typeBuilder = GlobTypeBuilderFactory.create("Person");
-        GlobType personType = typeBuilder.unCompleteType();
         IntegerField idField = typeBuilder.declareIntegerField("id");
         StringField nameField = typeBuilder.declareStringField("name");
         IntegerField ageField = typeBuilder.declareIntegerField("age");
-        typeBuilder.complete();
+        GlobType personType = typeBuilder.build();
 
         // 2. Create some data
         List<Glob> people = new ArrayList<>();
@@ -1312,11 +1309,10 @@ public class SearchTest {
     @Test
     void bug() throws IOException {
         GlobTypeBuilder typeBuilder = GlobTypeBuilderFactory.create("Person");
-        GlobType personType = typeBuilder.unCompleteType();
         IntegerField idField = typeBuilder.declareIntegerField("id");
         StringField nameField = typeBuilder.declareStringField("name");
         IntegerField ageField = typeBuilder.declareIntegerField("age");
-        typeBuilder.complete();
+        GlobType personType = typeBuilder.build();
         List<Glob> people = new ArrayList<>();
         extracted(people, personType, nameField, ageField, idField);
 

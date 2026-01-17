@@ -30,11 +30,10 @@ public class Dummy1Type {
 
     static {
         final GlobTypeBuilder globTypeBuilder = GlobTypeBuilderFactory.create("Dummy1Type");
-        TYPE = globTypeBuilder.unCompleteType();
         id = globTypeBuilder.declareIntegerField("id");
         name = globTypeBuilder.declareStringField("name");
-        subObjectInline = globTypeBuilder.declareGlobField("subObjectInline", Dummy2Type.TYPE, HeapInline.UNIQUE_GLOB);
-        subObject = globTypeBuilder.declareGlobField("subObject", Dummy2Type.TYPE);
-        globTypeBuilder.complete();
+        subObjectInline = globTypeBuilder.declareGlobField("subObjectInline", () -> Dummy2Type.TYPE, HeapInline.UNIQUE_GLOB);
+        subObject = globTypeBuilder.declareGlobField("subObject", () -> Dummy2Type.TYPE);
+        TYPE = globTypeBuilder.build();
     }
 }

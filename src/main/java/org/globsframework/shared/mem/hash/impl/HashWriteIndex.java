@@ -109,12 +109,11 @@ public class HashWriteIndex {
 
         static {
             final GlobTypeBuilder builder = GlobTypeBuilderFactory.create("HashHeader");
-            TYPE = builder.unCompleteType();
             hash = builder.declareIntegerField("hash");
             nextIndex = builder.declareIntegerField("nextIndex");
             dataIndex = builder.declareLongField("dataIndex");
             isValid = builder.declareIntegerField("isValid");
-            builder.complete();
+            TYPE = builder.build();
         }
 
         public static Glob createValid(int hash, int nextIndex, long dataIndex) {

@@ -306,7 +306,6 @@ public class TestShared {
 
         static {
             final GlobTypeBuilder globTypeBuilder = GlobTypeBuilderFactory.create("DummyObject1");
-            TYPE = globTypeBuilder.unCompleteType();
             name = globTypeBuilder.declareStringField("name");
             val1 = globTypeBuilder.declareIntegerField("val1");
             val2 = globTypeBuilder.declareIntegerField("val2");
@@ -322,7 +321,7 @@ public class TestShared {
             fixSizeStrNoTruncate = globTypeBuilder.declareStringField("fixSizeStrNoTruncate", MaxSize.create(22, false));
             fixBigSizeStrNoTruncate = globTypeBuilder.declareStringField("fixBigSizeStrNoTruncate", MaxSize.create(200, false));
             fix7BitsSizeStr = globTypeBuilder.declareStringField("fix7BitsSizeStr", MaxSize.create(15), Heap7BitsString.UNIQUE_GLOB);
-            globTypeBuilder.complete();
+            TYPE = globTypeBuilder.build();
         }
     }
 

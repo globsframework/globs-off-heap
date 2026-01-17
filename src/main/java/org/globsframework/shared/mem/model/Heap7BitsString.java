@@ -16,8 +16,7 @@ public class Heap7BitsString {
 
     static {
         final GlobTypeBuilder heapGlobTypeBuilder = GlobTypeBuilderFactory.create("HeapInline");
-        TYPE = heapGlobTypeBuilder.unCompleteType();
-        heapGlobTypeBuilder.complete();
+        TYPE = heapGlobTypeBuilder.build();
         UNIQUE_KEY = KeyBuilder.newEmptyKey(TYPE);
         UNIQUE_GLOB = TYPE.instantiate();
     }

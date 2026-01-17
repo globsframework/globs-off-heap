@@ -24,14 +24,13 @@ public class Dummy2Type {
 
     static {
         final GlobTypeBuilder globTypeBuilder = GlobTypeBuilderFactory.create("Dummy2Type");
-        TYPE = globTypeBuilder.unCompleteType();
         name = globTypeBuilder.declareStringField("name");
-        subObjectsInline = globTypeBuilder.declareGlobArrayField("subObjectsInline", Dummy3Type.TYPE,
+        subObjectsInline = globTypeBuilder.declareGlobArrayField("subObjectsInline", () -> Dummy3Type.TYPE,
                 HeapInline.UNIQUE_GLOB, HeapMaxElement.create(3));
-        subObjects = globTypeBuilder.declareGlobArrayField("subObjects", Dummy3Type.TYPE,
+        subObjects = globTypeBuilder.declareGlobArrayField("subObjects", () -> Dummy3Type.TYPE,
                 HeapMaxElement.create(3));
         aligned = globTypeBuilder.declareIntegerField("aligned");
-        globTypeBuilder.complete();
+        TYPE = globTypeBuilder.build();
     }
 
     public static MutableGlob create(String name) {
