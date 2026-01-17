@@ -17,7 +17,6 @@ import org.globsframework.shared.mem.hash.OffHeapWriteHashService;
 import org.globsframework.shared.mem.impl.Dummy1Type;
 import org.globsframework.shared.mem.impl.Dummy2Type;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -28,7 +27,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class OffHeapHashServiceImplTest {
 
@@ -151,10 +151,9 @@ class OffHeapHashServiceImplTest {
 
         static {
             final GlobTypeBuilder typeBuilder = GlobTypeBuilderFactory.create("MultiKey");
-            TYPE = typeBuilder.unCompleteType();
             id = typeBuilder.declareLongField("id");
             val1 = typeBuilder.declareLongField("val1");
-            typeBuilder.complete();
+            TYPE = typeBuilder.build();
         }
     }
 

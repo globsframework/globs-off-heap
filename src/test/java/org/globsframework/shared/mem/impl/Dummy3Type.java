@@ -16,10 +16,9 @@ public class Dummy3Type {
 
     static {
         final GlobTypeBuilder globTypeBuilder = GlobTypeBuilderFactory.create("Dummy3Type");
-        TYPE = globTypeBuilder.unCompleteType();
         data = globTypeBuilder.declareStringField("data");
         unaligned = globTypeBuilder.declareBooleanField("unaligned");
-        globTypeBuilder.complete();
+        TYPE = globTypeBuilder.build();
     }
 
     public static MutableGlob create(String data) {

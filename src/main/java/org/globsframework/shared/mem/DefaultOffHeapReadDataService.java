@@ -254,11 +254,11 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
             if (stringChannel != null) {
                 stringChannel.close();
             }
-        } catch (IOException _) {
+        } catch (IOException x) {
         }
         try {
             dataChannel.close();
-        } catch (IOException _) {
+        } catch (IOException x) {
         }
     }
 

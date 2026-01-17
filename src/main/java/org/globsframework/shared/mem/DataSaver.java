@@ -107,7 +107,7 @@ public class DataSaver {
         }
         computeOffset(dataType, globs, offsets);
         if (extracted.isEmpty()) {
-            try (FileChannel _ = FileChannel.open(path.resolve(DefaultOffHeapTreeService.createContentFileName(dataType)),
+            try (FileChannel x = FileChannel.open(path.resolve(DefaultOffHeapTreeService.createContentFileName(dataType)),
                     StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)) {
             }
         }

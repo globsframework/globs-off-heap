@@ -47,7 +47,7 @@ public class IndexTypeBuilder {
 
         offsetVal1 = keyTypeBuilder.declareIntegerField("indexOffset1");
         offsetVal2 = keyTypeBuilder.declareIntegerField("indexOffset2");
-        indexType = keyTypeBuilder.get();
+        indexType = keyTypeBuilder.build();
         dataOffset1Accessor = indexType.getGlobFactory().getSetAccessor(dataOffset1);
         dataLenOffset1Accessor = indexType.getGlobFactory().getSetAccessor(dataLenOffset1);
         offsetVal1Accessor = indexType.getGlobFactory().getSetAccessor(offsetVal1);

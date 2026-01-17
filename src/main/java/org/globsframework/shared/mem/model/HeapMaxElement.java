@@ -21,9 +21,8 @@ public class HeapMaxElement {
 
     static {
         final GlobTypeBuilder heapGlobTypeBuilder = GlobTypeBuilderFactory.create("HeapMaxElement");
-        TYPE = heapGlobTypeBuilder.unCompleteType();
         maxSize = heapGlobTypeBuilder.declareIntegerField("maxSize");
-        heapGlobTypeBuilder.complete();
+        TYPE = heapGlobTypeBuilder.build();
         UNIQUE_KEY = KeyBuilder.newEmptyKey(TYPE);
     }
 }

@@ -20,11 +20,10 @@ public class OffHeapExample {
     public static void main(String[] args) throws IOException {
         // 1. Define a GlobType
         GlobTypeBuilder typeBuilder = GlobTypeBuilderFactory.create("Person");
-        GlobType personType = typeBuilder.unCompleteType();
         IntegerField id = typeBuilder.declareIntegerField("id");
         StringField name = typeBuilder.declareStringField("name");
         IntegerField age = typeBuilder.declareIntegerField("age");
-        typeBuilder.complete();
+        GlobType personType = typeBuilder.build();
 
         // 2. Create some data
         List<Glob> people = new ArrayList<>();
