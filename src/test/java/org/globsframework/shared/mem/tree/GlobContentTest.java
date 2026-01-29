@@ -1,5 +1,7 @@
 package org.globsframework.shared.mem.tree;
 
+import org.globsframework.core.functional.FunctionalKeyBuilder;
+import org.globsframework.core.functional.FunctionalKeyBuilderFactory;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
 import org.globsframework.json.GSonUtils;
@@ -21,7 +23,7 @@ public class GlobContentTest {
     @Test
     void withGlobInGlob() throws IOException {
         final MutableGlob d1 = Dummy1Type.TYPE.instantiate().set(Dummy1Type.id, 1);
-        final MutableGlob d2 = Dummy1Type.TYPE.instantiate().set(Dummy1Type.id, 2);
+        final MutableGlob d2 = Dummy1Type.TYPE.instantiate().set(Dummy1Type.id, 2).set(Dummy1Type.name, "d2");
         final MutableGlob d21 = Dummy2Type.create("d21");
         final MutableGlob d22 = Dummy2Type.create("d22");
         d1.set(Dummy1Type.subObject, d21);
@@ -31,6 +33,10 @@ public class GlobContentTest {
         d2.set(Dummy1Type.subObjectInline, Dummy2Type.create("d23"));
 
         OffHeapTreeService offHeapService = OffHeapTreeService.create(Dummy1Type.TYPE);
+
+        final FunctionalKeyBuilder functionalKeyBuilder = FunctionalKeyBuilderFactory.create(Dummy1Type.TYPE)
+                .add(Dummy1Type.id).add(Dummy1Type.name).create();
+        final OffHeapUniqueIndex uniqueIndex = offHeapService.declareUniqueIndex("uniqueIndex", functionalKeyBuilder);
 
         Arena arena = Arena.ofShared();
 
@@ -56,6 +62,13 @@ public class GlobContentTest {
                 GSonUtils.encode(a1, false));
         Assertions.assertEquals(GSonUtils.encode(d2, false),
                 GSonUtils.encode(a2, false));
+
+        final ReadOffHeapUniqueIndex index = readHeapService.getIndex(uniqueIndex);
+        final OffHeapRef offHeapRef = index.find(functionalKeyBuilder.create()
+                .set(Dummy1Type.id, 1)
+                .set(Dummy1Type.name, null).create());
+        Assertions.assertNotNull(offHeapRef);
+        Assertions.assertEquals(0, offHeapRef.offset());
     }
 
     public static String EXPECTED = """

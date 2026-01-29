@@ -32,6 +32,9 @@ public class StringDataAccess implements DataAccess {
     public String get(MemorySegment memorySegment, long offset, StringAccessorByAddress stringAccessorByAddress) {
         int len = (int) varLenHandle.get(memorySegment, 0L, offset);
         int addr = (int) varAddrHandle.get(memorySegment, 0L, offset);
+        if (len < 0) {
+            return null;
+        }
         return stringAccessorByAddress.get(addr, len);
     }
 
