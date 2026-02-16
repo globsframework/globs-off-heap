@@ -15,6 +15,7 @@ import java.lang.foreign.GroupLayout;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.invoke.VarHandle;
+import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -32,6 +33,7 @@ public class HashReadIndex {
     private final Arena arena;
     private final MemorySegment memorySegment;
     private final HashIndex hashIndex;
+    private final int hashTableSize;
 
     public HashReadIndex(HashIndex hashIndex, Path path) {
         this.hashIndex = hashIndex;
@@ -40,8 +42,12 @@ public class HashReadIndex {
                     path.resolve(DefaultOffHeapTreeService.createContentFileName(HashWriteIndex.PerData.TYPE, hashIndex.name())), StandardOpenOption.READ);
             this.count = Math.toIntExact(indexChannel.size() / byteSizeWithPadding);
             arena = Arena.ofShared();
+            ByteBuffer buffer = ByteBuffer.wrap(new byte[HashWriteIndex.OFFSET_FOR_DATA]);
+            indexChannel.read(buffer);
+            buffer.flip();
+            hashTableSize = Math.toIntExact(buffer.getLong());
             memorySegment = indexChannel.map(FileChannel.MapMode.READ_ONLY,
-                    0,
+                    HashWriteIndex.OFFSET_FOR_DATA, //long for hash table size
                     count * byteSizeWithPadding, arena);
             memorySegment.load();
         } catch (IOException e) {
@@ -51,7 +57,7 @@ public class HashReadIndex {
 
     public Glob getAt(FunctionalKey functionalKey, ReadContext readContext) {
         int h = HashWriteIndex.hash(functionalKey);
-        final int tableIndex = HashWriteIndex.tableIndex(h, hashIndex.size());
+        final int tableIndex = HashWriteIndex.tableIndex(h, hashTableSize);
 
         long offset = tableIndex * byteSizeWithPadding;
         while (true) {
@@ -74,7 +80,7 @@ public class HashReadIndex {
 
     public void readAll(DataConsumer consumer, ReadContext readContext) {
         for (int i = 0; i < count; i++) {
-            long offset = i *  byteSizeWithPadding;
+            long offset = i * byteSizeWithPadding;
             if ((int) isValidVarHandle.get(memorySegment, offset) == 1) {
                 final Glob read = readContext.read((long) dataIndexVarHandle.get(memorySegment, offset), field -> true);
                 consumer.accept(read);

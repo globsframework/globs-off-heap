@@ -12,10 +12,13 @@ import org.globsframework.shared.mem.DataSaver;
 import org.globsframework.shared.mem.tree.impl.*;
 
 import java.io.IOException;
+import java.lang.foreign.MemorySegment;
+import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.*;
 
 public class HashWriteIndex {
+    public static final int OFFSET_FOR_DATA = 8;
     private HashIndex hashIndex;
     private int maxCollisions;
     private int nbCollisions;
@@ -23,7 +26,6 @@ public class HashWriteIndex {
     public HashWriteIndex(HashIndex hashIndex) {
         this.hashIndex = hashIndex;
     }
-
 
     void save(Path path, IdentityHashMap<Glob, Long> offset) throws IOException {
         maxCollisions = 0;
@@ -72,13 +74,35 @@ public class HashWriteIndex {
         DataSaver.saveData(path.resolve(DefaultOffHeapTreeService.createContentFileName(PerData.TYPE, hashIndex.name())),
                 rootOffHeapTypeInfo,
                 dataToSave, 1024 * 1024, Map.of(), Map.of(),
-                DataSaver.UpdateHeader.NO, DataSaver.FreeSpace.NONE);
-        DataSaver dataSaver = new DataSaver(path, PerData.TYPE, globType -> rootOffHeapTypeInfo);
-        dataSaver.saveData(dataToSave);
+                new DataSaver.UpdateHeader() {
+                    @Override
+                    public void update(MemorySegment memorySegment, long currenOffset, Glob glob) {
+                    }
+
+                    @Override
+                    public ByteBuffer getHeaderFile(long nextFree) {
+                        final ByteBuffer wrap = ByteBuffer.wrap(new byte[HashWriteIndex.OFFSET_FOR_DATA]);
+                        wrap.putLong(hashIndex.size());
+                        wrap.flip();
+                        return wrap;
+                    }
+                }, new DataSaver.FreeSpace() {
+                    @Override
+                    public int freeTypeCountAtEnd(GlobType globType) {
+                        return 0;
+                    }
+
+                    @Override
+                    public int freeByteSpaceAtStart(GlobType globType) {
+                        return HashWriteIndex.OFFSET_FOR_DATA;
+                    }
+                });
+//        DataSaver dataSaver = new DataSaver(path, PerData.TYPE, globType -> rootOffHeapTypeInfo);
+//        dataSaver.saveData(dataToSave);
     }
 
-    public static int tableIndex(int h, int tableSize1) {
-        return (tableSize1 - 1) & h;
+    public static int tableIndex(int h, int tableSize) {
+        return (tableSize - 1) & h;
     }
 
     // from java HashMap
