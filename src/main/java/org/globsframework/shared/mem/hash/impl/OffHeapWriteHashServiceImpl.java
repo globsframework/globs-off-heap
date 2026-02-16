@@ -36,7 +36,7 @@ class OffHeapWriteHashServiceImpl implements OffHeapWriteHashService {
     }
 
     @Override
-    public void save(List<Glob> data) throws IOException {
+    public void save(Collection<Glob> data) throws IOException {
         DataSaver dataSaver = new DataSaver(directory, type, globType -> offHeapTypeInfoMap.get(globType).offHeapTypeInfo,
                 new LocalUpdateHeaderAccessor(), new WantedFreeSpace(offsetHeader), currentSize -> currentSize * 2 + 1024);
         final DataSaver.Result result = dataSaver.saveData(data);

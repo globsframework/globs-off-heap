@@ -3,7 +3,7 @@ package org.globsframework.shared.mem.hash;
 import org.globsframework.core.model.Glob;
 
 import java.io.IOException;
-import java.util.List;
+import java.util.Collection;
 
 
 /*
@@ -33,6 +33,6 @@ Comment passez de maniere atomique tous les index a 1
  */
 public interface OffHeapWriteHashService {
 
-    void save(List<Glob> data) throws IOException;
+    void save(Collection<Glob> data) throws IOException;
 
 }

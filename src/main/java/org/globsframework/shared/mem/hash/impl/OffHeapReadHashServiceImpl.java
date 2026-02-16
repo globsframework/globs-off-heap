@@ -10,7 +10,6 @@ import org.globsframework.shared.mem.OffsetHeader;
 import org.globsframework.shared.mem.hash.OffHeapHashAccess;
 import org.globsframework.shared.mem.hash.OffHeapReadHashService;
 
-import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.nio.file.Path;
 import java.security.InvalidParameterException;
@@ -20,26 +19,14 @@ import java.util.Map;
 
 class OffHeapReadHashServiceImpl implements OffHeapReadHashService {
     private final Path directory;
-    private final Arena arena;
-    private final GlobInstantiator globInstantiator;
     private final List<HashIndex> index;
-    private final GlobType type;
-    private final HashSet<GlobType> typeToSave;
-    private final Map<GlobType, OffHeapTypeInfoWithFirstLayout> offHeapTypeInfoMap;
-    private final OffsetHeader offsetHeader;
     private final DefaultOffHeapReadDataService readDataService;
 
     public OffHeapReadHashServiceImpl(Path directory, Arena arena, GlobInstantiator globInstantiator,
                                       List<HashIndex> index, GlobType type,
                                       HashSet<GlobType> typeToSave, Map<GlobType, OffHeapTypeInfoWithFirstLayout> offHeapTypeInfoMap, OffsetHeader offsetHeader) {
         this.directory = directory;
-        this.arena = arena;
-        this.globInstantiator = globInstantiator;
         this.index = index;
-        this.type = type;
-        this.typeToSave = typeToSave;
-        this.offHeapTypeInfoMap = offHeapTypeInfoMap;
-        this.offsetHeader = offsetHeader;
         readDataService =
                 new DefaultOffHeapReadDataService(directory, arena, type,
                         globType -> offHeapTypeInfoMap.get(globType).offHeapTypeInfo,
@@ -58,7 +45,7 @@ class OffHeapReadHashServiceImpl implements OffHeapReadHashService {
             }
 
             @Override
-            public void readAll(DataConsumer consumer) throws IOException {
+            public void readAll(DataConsumer consumer) {
                 hashReadIndex.readAll(consumer, readDataService);
             }
         };

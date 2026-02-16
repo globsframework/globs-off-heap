@@ -5,13 +5,12 @@ import org.globsframework.core.metamodel.GlobType;
 import org.globsframework.core.model.GlobInstantiator;
 import org.globsframework.shared.mem.hash.impl.OffHeapHashServiceImpl;
 
-import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.nio.file.Path;
 
 public interface OffHeapHashService {
 
-    static OffHeapHashService create(GlobType globType) throws IOException {
+    static OffHeapHashService create(GlobType globType) {
         return new OffHeapHashServiceImpl(globType);
     }
 
