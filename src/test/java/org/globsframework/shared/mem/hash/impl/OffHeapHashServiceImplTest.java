@@ -89,6 +89,11 @@ class OffHeapHashServiceImplTest {
             final long nano = System.nanoTime() - start;
             System.out.println("Read " + TimeUnit.NANOSECONDS.toMicros(nano) + " us => " + nano / globs.size() + " ns/search");
         }
+        {
+            List<Glob> data = new ArrayList<>();
+            reader.readAll(data::add);
+            Assertions.assertEquals(size, data.size());
+        }
 
 //        {
 //            final long start = System.nanoTime();

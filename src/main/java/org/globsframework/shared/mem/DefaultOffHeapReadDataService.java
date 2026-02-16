@@ -7,7 +7,6 @@ import org.globsframework.core.model.GlobInstantiator;
 import org.globsframework.core.model.MutableGlob;
 import org.globsframework.core.utils.collections.IntHashMap;
 import org.globsframework.shared.mem.field.handleacces.HandleAccess;
-import org.globsframework.shared.mem.tree.*;
 import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
 import org.globsframework.shared.mem.tree.impl.OffHeapTypeInfo;
 import org.globsframework.shared.mem.tree.impl.RootOffHeapTypeInfo;
@@ -57,6 +56,7 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
             if (Files.exists(resolve)) {
                 this.stringChannel = FileChannel.open(resolve, StandardOpenOption.READ);
                 this.stringBytesBuffer = stringChannel.map(FileChannel.MapMode.READ_ONLY, 0, stringChannel.size());
+                stringBytesBuffer.load();
             }
             else {
                 this.stringChannel = null;
@@ -105,6 +105,7 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
             final long size = fileChannel.size();
             int count = Math.toIntExact(size / subOffHeapTypeInfo.primary().byteSizeWithPadding());
             final MemorySegment subData = fileChannel.map(openMode, 0, size, arena);
+            subData.load();
             return new TypeSegment(subData.asSlice(offsetForData), subData.asSlice(offsetForData, subOffHeapTypeInfo.primary().byteSizeWithPadding() * count), fileChannel,
                     subOffHeapTypeInfo, count, size);
         }

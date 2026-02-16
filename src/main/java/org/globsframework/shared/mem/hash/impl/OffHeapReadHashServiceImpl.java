@@ -4,15 +4,19 @@ import org.globsframework.core.functional.FunctionalKey;
 import org.globsframework.core.metamodel.GlobType;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.GlobInstantiator;
+import org.globsframework.shared.mem.DataConsumer;
 import org.globsframework.shared.mem.DefaultOffHeapReadDataService;
 import org.globsframework.shared.mem.OffsetHeader;
 import org.globsframework.shared.mem.hash.OffHeapHashAccess;
 import org.globsframework.shared.mem.hash.OffHeapReadHashService;
 
+import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.nio.file.Path;
 import java.security.InvalidParameterException;
-import java.util.*;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 
 class OffHeapReadHashServiceImpl implements OffHeapReadHashService {
     private final Path directory;
@@ -51,6 +55,11 @@ class OffHeapReadHashServiceImpl implements OffHeapReadHashService {
             @Override
             public Glob get(FunctionalKey key) {
                 return hashReadIndex.getAt(key, readDataService);
+            }
+
+            @Override
+            public void readAll(DataConsumer consumer) throws IOException {
+                hashReadIndex.readAll(consumer, readDataService);
             }
         };
     }

@@ -3,7 +3,6 @@ package org.globsframework.shared.mem;
 import org.globsframework.core.metamodel.GlobType;
 import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.model.Glob;
-import org.globsframework.shared.mem.tree.DataConsumer;
 import org.globsframework.shared.mem.tree.impl.StringAccessorByAddress;
 import org.globsframework.shared.mem.tree.impl.read.TypeSegment;
 

@@ -1,11 +1,11 @@
 package org.globsframework.shared.mem.tree.impl.read;
 
 import org.globsframework.core.functional.FunctionalKey;
-import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
-import org.globsframework.shared.mem.tree.impl.StringAccessorByAddress;
-import org.globsframework.shared.mem.tree.impl.IndexTypeBuilder;
 import org.globsframework.shared.mem.field.dataaccess.DataAccess;
 import org.globsframework.shared.mem.tree.*;
+import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
+import org.globsframework.shared.mem.tree.impl.IndexTypeBuilder;
+import org.globsframework.shared.mem.tree.impl.StringAccessorByAddress;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;
@@ -36,6 +36,7 @@ public class DefaultReadOffHeapUniqueIndex implements ReadOffHeapUniqueIndex, Re
         final long size = indexChannel.size();
         isEmpty = size == 0;
         memorySegment = indexChannel.map(FileChannel.MapMode.READ_ONLY, 0, size, Arena.ofShared());
+        memorySegment.load();
         maxIndex = Math.toIntExact(size / indexTypeBuilder.offHeapIndexTypeInfo.primary().byteSizeWithPadding());
     }
 
@@ -110,8 +111,7 @@ public class DefaultReadOffHeapUniqueIndex implements ReadOffHeapUniqueIndex, Re
                     if (index >= 0) {
                         binSearch(functionalKey, index, maxDepth, filter, dataIndex, DefaultReadOffHeapManyIndex.EqualAt.BOTH);
                     }
-                }
-                else {
+                } else {
                     return;
                 }
             } else if (equalAt == DefaultReadOffHeapManyIndex.EqualAt.RIGHT) {
@@ -190,9 +190,9 @@ public class DefaultReadOffHeapUniqueIndex implements ReadOffHeapUniqueIndex, Re
     }
 
     private static int compare(FunctionalKey functionalKey, long index,
-                        DataAccess[] handleAccesses, MemorySegment memSeg, StringAccessorByAddress stringAccessor) {
-        for (int i = 0; i < handleAccesses.length; i++) {
-            int cmp = handleAccesses[i].compare(functionalKey, memSeg, index, stringAccessor);
+                               DataAccess[] handleAccesses, MemorySegment memSeg, StringAccessorByAddress stringAccessor) {
+        for (DataAccess handleAccess : handleAccesses) {
+            int cmp = handleAccess.compare(functionalKey, memSeg, index, stringAccessor);
             if (cmp != 0) {
                 return cmp;
             }

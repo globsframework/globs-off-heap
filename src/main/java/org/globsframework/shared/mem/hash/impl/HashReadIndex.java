@@ -3,6 +3,7 @@ package org.globsframework.shared.mem.hash.impl;
 import org.globsframework.core.functional.FunctionalKey;
 import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.model.Glob;
+import org.globsframework.shared.mem.DataConsumer;
 import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
 import org.globsframework.shared.mem.tree.impl.OffHeapGlobTypeGroupLayoutImpl;
 import org.globsframework.shared.mem.tree.impl.OffHeapTypeInfo;
@@ -42,6 +43,7 @@ public class HashReadIndex {
             memorySegment = indexChannel.map(FileChannel.MapMode.READ_ONLY,
                     0,
                     count * byteSizeWithPadding, arena);
+            memorySegment.load();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -67,6 +69,16 @@ public class HashReadIndex {
                 return null;
             }
             offset = nextIndex * byteSizeWithPadding;
+        }
+    }
+
+    public void readAll(DataConsumer consumer, ReadContext readContext) {
+        for (int i = 0; i < count; i++) {
+            long offset = i *  byteSizeWithPadding;
+            if ((int) isValidVarHandle.get(memorySegment, offset) == 1) {
+                final Glob read = readContext.read((long) dataIndexVarHandle.get(memorySegment, offset), field -> true);
+                consumer.accept(read);
+            }
         }
     }
 

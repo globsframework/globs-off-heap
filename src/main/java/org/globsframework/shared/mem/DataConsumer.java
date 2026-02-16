@@ -1,4 +1,4 @@
-package org.globsframework.shared.mem.tree;
+package org.globsframework.shared.mem;
 
 import org.globsframework.core.model.Glob;
 

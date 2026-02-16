@@ -46,12 +46,19 @@ public class DefaultReadOffHeapManyIndex implements ReadOffHeapMultiIndex, ReadI
         this.indexDataRefChannel = FileChannel.open(path.resolve(DefaultOffHeapTreeService.getIndexDataNameFile(indexName)), StandardOpenOption.READ);
         memorySegment = indexChannel.map(FileChannel.MapMode.READ_ONLY, 0, size, Arena.ofShared());
         dataRefMemorySegment = indexDataRefChannel.map(FileChannel.MapMode.READ_ONLY, 0, indexDataRefChannel.size(), Arena.ofShared());
+        dataRefMemorySegment.load();
         maxIndex = Math.toIntExact(size / indexTypeBuilder.offHeapIndexTypeInfo.primary().byteSizeWithPadding());
     }
 
     public OffHeapRefs find(FunctionalKey functionalKey) {
         if (isEmpty) {
             return OffHeapRefs.NULL;
+        }
+        for (DataAccess dataAccess : indexTypeBuilder.dataAccesses) {
+            if (!functionalKey.isSet(dataAccess.getField())) {
+                throw new IllegalArgumentException("FunctionalKey must contain all fields of the index: "
+                                                   + offHeapIndex.getName() + " " + functionalKey + " for field " + dataAccess.getField());
+            }
         }
         return binSearch(functionalKey, 0);
     }
@@ -191,7 +198,6 @@ public class DefaultReadOffHeapManyIndex implements ReadOffHeapMultiIndex, ReadI
         }
     }
 
-
     private OffHeapRefs binSearch(FunctionalKey functionalKey, long indexOffset) {
         int compare = compare(functionalKey, indexOffset);
         if (compare == 0) {
@@ -256,13 +262,7 @@ public class DefaultReadOffHeapManyIndex implements ReadOffHeapMultiIndex, ReadI
     }
 
     private int compare(FunctionalKey functionalKey, long index) {
-        DataAccess[] handleAccesses = indexTypeBuilder.dataAccesses;
-        for (int i = 0; i < handleAccesses.length; i++) {
-            DataAccess handleAccess = handleAccesses[i];
-            if (!functionalKey.isSet(handleAccess.getField())) {
-                throw new IllegalArgumentException("FunctionalKey must contain all fields of the index: "
-                                                   + offHeapIndex.getName() + " " + functionalKey + " for field " + handleAccess.getField());
-            }
+        for (DataAccess handleAccess : indexTypeBuilder.dataAccesses) {
             int cmp = handleAccess.compare(functionalKey, memorySegment, index, stringAccessor);
             if (cmp != 0) {
                 return cmp;
@@ -274,8 +274,7 @@ public class DefaultReadOffHeapManyIndex implements ReadOffHeapMultiIndex, ReadI
     private int compare(FunctionalKey functionalKey, long index, int maxDepth) {
         DataAccess[] handleAccesses = indexTypeBuilder.dataAccesses;
         for (int i = 0; i < maxDepth; i++) {
-            DataAccess handleAccess = handleAccesses[i];
-            int cmp = handleAccess.compare(functionalKey, memorySegment, index, stringAccessor);
+            int cmp = handleAccesses[i].compare(functionalKey, memorySegment, index, stringAccessor);
             if (cmp != 0) {
                 return cmp;
             }

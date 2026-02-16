@@ -1,8 +1,6 @@
 package org.globsframework.shared.mem.hash.impl;
 
 import org.globsframework.core.metamodel.GlobType;
-import org.globsframework.core.metamodel.fields.Field;
-import org.globsframework.core.metamodel.fields.GlobField;
 import org.globsframework.core.model.Glob;
 import org.globsframework.shared.mem.DataSaver;
 import org.globsframework.shared.mem.DefaultOffHeapReadDataService;
@@ -16,7 +14,6 @@ import org.globsframework.shared.mem.tree.impl.write.StringRef;
 
 import java.io.IOException;
 import java.lang.foreign.Arena;
-import java.lang.foreign.MemorySegment;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
@@ -209,7 +206,7 @@ class OffHeapUpdaterServiceImpl implements OffHeapUpdaterService {
         final IdentityHashMap<Glob, Long> globLongIdentityHashMap = dataOffsets.get(typeToSave);
         for (Glob glob : dataToSave.keySet()) {
             final Long offset = globLongIdentityHashMap.get(glob);
-            if (((long) offHeapTypeInfoWithFirstLayout.freeIdHandle.get(typeSegment.segment(), offset)) == 0){
+            if (((long) offHeapTypeInfoWithFirstLayout.freeIdHandle.get(typeSegment.segment(), offset)) == 0) {
                 throw new RuntimeException("Bug : place at " + offset + " is not free for " + typeToSave.getName());
             }
             offHeapTypeInfoWithFirstLayout.freeIdHandle.set(typeSegment.segment(), offset, 0);
@@ -219,14 +216,15 @@ class OffHeapUpdaterServiceImpl implements OffHeapUpdaterService {
         }
     }
 
-    record ToScan(GlobType globType, long dataOffset) {}
+    record ToScan(GlobType globType, long dataOffset) {
+    }
 
     private void extractOffsetToReset(long previousDataIndex) {
         Map<GlobType, Set<Long>> dataOffsetsToFree = new HashMap<>();
         List<ToScan> indexToScan = new ArrayList<>();
         indexToScan.add(new ToScan(type, previousDataIndex));
         final FreeReferenceOffset referenceOffset = new FreeReferenceOffset(dataOffsetsToFree, indexToScan);
-        while (!indexToScan.isEmpty()){
+        while (!indexToScan.isEmpty()) {
             ToScan toScan = indexToScan.removeFirst();
             for (HandleAccess handleAccess : offHeapTypeInfoMap.get(toScan.globType()).offHeapTypeInfo.primary().handleAccesses) {
                 handleAccess.scanOffset(freePositions.get(toScan.globType()).typeSegment.segment(), toScan.dataOffset(), referenceOffset);

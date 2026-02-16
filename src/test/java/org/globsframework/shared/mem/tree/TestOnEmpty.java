@@ -3,6 +3,7 @@ package org.globsframework.shared.mem.tree;
 import org.globsframework.core.functional.FunctionalKeyBuilder;
 import org.globsframework.core.functional.FunctionalKeyBuilderFactory;
 import org.globsframework.core.model.Glob;
+import org.globsframework.shared.mem.DataConsumer;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 

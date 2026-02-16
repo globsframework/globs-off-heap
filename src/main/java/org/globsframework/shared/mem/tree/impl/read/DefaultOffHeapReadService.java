@@ -4,6 +4,7 @@ import org.globsframework.core.metamodel.GlobType;
 import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.GlobInstantiator;
+import org.globsframework.shared.mem.DataConsumer;
 import org.globsframework.shared.mem.DefaultOffHeapReadDataService;
 import org.globsframework.shared.mem.OffHeapReadDataService;
 import org.globsframework.shared.mem.tree.*;

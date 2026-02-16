@@ -2,6 +2,7 @@ package org.globsframework.shared.mem.tree;
 
 import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.model.Glob;
+import org.globsframework.shared.mem.DataConsumer;
 
 import java.io.IOException;
 import java.util.ArrayList;
