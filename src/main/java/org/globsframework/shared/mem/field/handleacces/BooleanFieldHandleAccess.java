@@ -4,6 +4,8 @@ import org.globsframework.core.metamodel.fields.BooleanField;
 import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
+import org.globsframework.core.model.globaccessor.set.GlobSetAccessor;
+import org.globsframework.core.model.globaccessor.set.GlobSetBooleanAccessor;
 import org.globsframework.shared.mem.tree.impl.read.ReadContext;
 import org.globsframework.shared.mem.tree.impl.write.SaveContext;
 
@@ -15,10 +17,12 @@ import java.lang.invoke.VarHandle;
 public class BooleanFieldHandleAccess implements HandleAccess {
     private final VarHandle varHandle;
     private final BooleanField field;
+    private final GlobSetBooleanAccessor setAccessor;
 
     public BooleanFieldHandleAccess(VarHandle varHandle, BooleanField field) {
         this.varHandle = varHandle;
         this.field = field;
+        setAccessor = field.getGlobType().getSetAccessor(field);
     }
 
     public static HandleAccess create(GroupLayout groupLayout, BooleanField field) {
@@ -38,7 +42,6 @@ public class BooleanFieldHandleAccess implements HandleAccess {
 
     @Override
     public void readAtOffset(MutableGlob data, MemorySegment memorySegment, long offset, ReadContext readContext) {
-        data.set(field, (boolean)varHandle.get(memorySegment, offset));
+        setAccessor.set(data, (boolean)varHandle.get(memorySegment, offset));
     }
-
 }

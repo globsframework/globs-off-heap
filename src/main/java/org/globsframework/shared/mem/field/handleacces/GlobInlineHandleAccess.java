@@ -5,6 +5,8 @@ import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.metamodel.fields.GlobField;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
+import org.globsframework.core.model.globaccessor.set.GlobSetAccessor;
+import org.globsframework.core.model.globaccessor.set.GlobSetGlobAccessor;
 import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
 import org.globsframework.shared.mem.tree.impl.OffHeapTypeInfo;
 import org.globsframework.shared.mem.tree.impl.read.ReadContext;
@@ -20,12 +22,14 @@ public class GlobInlineHandleAccess implements HandleAccess {
     private final long dataOffset;
     private final GlobField field;
     private final GlobType targetType;
+    private final GlobSetGlobAccessor setAccessor;
 
     public GlobInlineHandleAccess(VarHandle byteIsSetHandle, long dataOffset, GlobField field) {
         this.byteIsSetHandle = byteIsSetHandle;
         this.dataOffset = dataOffset;
         this.field = field;
         targetType = field.getTargetType();
+        setAccessor = field.getGlobType().getSetAccessor(field);
     }
 
     public static HandleAccess create(GroupLayout groupLayout, GlobField globField) {
@@ -66,7 +70,7 @@ public class GlobInlineHandleAccess implements HandleAccess {
             return;
         }
         if (isSetFlag == 1) {
-            data.set(field, null);
+            setAccessor.set(data, null);
             return;
         }
         final HandleAccess[] handleAccesses = readContext.getOffHeapInlineTypeInfo(targetType).handleAccesses;
@@ -75,6 +79,6 @@ public class GlobInlineHandleAccess implements HandleAccess {
         for (HandleAccess handleAccess : handleAccesses) {
             handleAccess.readAtOffset(instantiate, slice, 0, readContext);
         }
-        data.set(field, instantiate);
+        setAccessor.set(data, instantiate);
     }
 }

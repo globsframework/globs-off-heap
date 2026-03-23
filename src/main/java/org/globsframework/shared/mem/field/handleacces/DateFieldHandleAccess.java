@@ -4,6 +4,8 @@ import org.globsframework.core.metamodel.fields.DateField;
 import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
+import org.globsframework.core.model.globaccessor.set.GlobSetAccessor;
+import org.globsframework.core.model.globaccessor.set.GlobSetDateAccessor;
 import org.globsframework.shared.mem.field.dataaccess.DateDataAccess;
 import org.globsframework.shared.mem.tree.impl.read.ReadContext;
 import org.globsframework.shared.mem.tree.impl.write.SaveContext;
@@ -17,10 +19,12 @@ import java.time.LocalDate;
 public class DateFieldHandleAccess implements HandleAccess {
     private final DateField dateField;
     private final VarHandle longVarHandle;
+    private final GlobSetDateAccessor setAccessor;
 
     DateFieldHandleAccess(DateField dateField, VarHandle longVarHandle) {
         this.dateField = dateField;
         this.longVarHandle = longVarHandle;
+        setAccessor = dateField.getGlobType().getSetAccessor(dateField);
     }
 
     public static DateFieldHandleAccess create(GroupLayout groupLayout, DateField dateField) {
@@ -49,10 +53,10 @@ public class DateFieldHandleAccess implements HandleAccess {
     public void readAtOffset(MutableGlob data, MemorySegment memorySegment, long offset, ReadContext readContext) {
         long longDate = (long) longVarHandle.get(memorySegment, offset);
         if (longDate != Long.MAX_VALUE) {
-            data.set(dateField, DateDataAccess.toLocalDate(longDate));
+            setAccessor.set(data, DateDataAccess.toLocalDate(longDate));
         }
         else {
-            data.set(dateField, null);
+            setAccessor.set(data, null);
         }
     }
 }

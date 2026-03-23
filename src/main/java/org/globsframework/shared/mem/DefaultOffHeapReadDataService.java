@@ -118,7 +118,7 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
         final HandleAccess[] handleAccesses = offHeapTypeInfo.primary().handleAccesses;
         final GlobType type = offHeapTypeInfo.primary().type;
         for (int i = 0; i < size; i++) {
-            consumer.accept(readGlob(memorySegment, offset[i], this, handleAccesses, type, field -> true));
+            consumer.accept(readGlob(memorySegment, offset[i], this, handleAccesses, type, null));
         }
         return size;
     }
@@ -148,7 +148,7 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
             if (offset + groupSize > dataSize) {
                 return;
             }
-            final MutableGlob instantiate = readGlob(memorySegment, offset, readContext, handleAccesses, type, field -> true);
+            final MutableGlob instantiate = readGlob(memorySegment, offset, readContext, handleAccesses, type, null);
             consumer.accept(instantiate);
             offset += groupSize;
         }
@@ -182,6 +182,17 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
 
     private MutableGlob readGlob(MemorySegment memorySegment, long offset, ReadContext readContext,
                                  HandleAccess[] handleAccesses, GlobType type, Predicate<Field> onlyFields) {
+        if (onlyFields != null) {
+            return filteredRead(memorySegment, offset, readContext, handleAccesses, type, onlyFields);
+        }
+        final MutableGlob instantiate = globInstantiator.newGlob(type);
+        for (HandleAccess handleAccess : handleAccesses) {
+            handleAccess.readAtOffset(instantiate, memorySegment, offset, readContext);
+        }
+        return instantiate;
+    }
+
+    private MutableGlob filteredRead(MemorySegment memorySegment, long offset, ReadContext readContext, HandleAccess[] handleAccesses, GlobType type, Predicate<Field> onlyFields) {
         final MutableGlob instantiate = globInstantiator.newGlob(type);
         for (HandleAccess handleAccess : handleAccesses) {
             if (onlyFields.test(handleAccess.getField())) {
@@ -197,7 +208,7 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
             return null;
         }
         return readGlob(memorySegment, offset, this, offHeapTypeInfo.primary().handleAccesses,
-                offHeapTypeInfo.primary().type, field -> true);
+                offHeapTypeInfo.primary().type, null);
     }
 
     @Override

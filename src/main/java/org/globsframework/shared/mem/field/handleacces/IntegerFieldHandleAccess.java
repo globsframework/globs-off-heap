@@ -4,6 +4,8 @@ import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.metamodel.fields.IntegerField;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
+import org.globsframework.core.model.globaccessor.set.GlobSetAccessor;
+import org.globsframework.core.model.globaccessor.set.GlobSetIntAccessor;
 import org.globsframework.shared.mem.tree.impl.read.ReadContext;
 import org.globsframework.shared.mem.tree.impl.write.SaveContext;
 
@@ -15,10 +17,12 @@ import java.lang.invoke.VarHandle;
 public class IntegerFieldHandleAccess implements HandleAccess {
     private final VarHandle varHandle;
     private final IntegerField field;
+    private final GlobSetIntAccessor setAccessor;
 
     public IntegerFieldHandleAccess(VarHandle varHandle, IntegerField field) {
         this.varHandle = varHandle;
         this.field = field;
+        setAccessor = field.getGlobType().getSetAccessor(field);
     }
 
     public static HandleAccess create(GroupLayout groupLayout, IntegerField field) {
@@ -38,7 +42,7 @@ public class IntegerFieldHandleAccess implements HandleAccess {
 
     @Override
     public void readAtOffset(MutableGlob data, MemorySegment memorySegment, long offset, ReadContext readContext) {
-        data.set(field, (int)varHandle.get(memorySegment, offset));
+        setAccessor.set(data, (int)varHandle.get(memorySegment, offset));
     }
 
 }

@@ -82,12 +82,21 @@ class OffHeapHashServiceImplTest {
         }
         {
             final long start = System.nanoTime();
+            for (Glob glob : globs) {
+                final Glob glob1 = reader.get(keyBuilder.proxy(glob));
+                assertNotNull(glob1);
+            }
+            final long nano = System.nanoTime() - start;
+            System.out.println("Read " + TimeUnit.NANOSECONDS.toMicros(nano) + " us => " + nano / globs.size() + " ns/search");
+        }
+        {
+            final long start = System.nanoTime();
             for (int i = 0; i < 1000; i++) {
                 Assertions.assertNull(reader.get(keyBuilder.create()
                         .set(Dummy1Type.id, -1 - i).create()));
             }
             final long nano = System.nanoTime() - start;
-            System.out.println("Read " + TimeUnit.NANOSECONDS.toMicros(nano) + " us => " + nano / globs.size() + " ns/search");
+            System.out.println("Empty read " + TimeUnit.NANOSECONDS.toMicros(nano) + " us => " + nano / 1000 + " ns/search");
         }
         {
             List<Glob> data = new ArrayList<>();

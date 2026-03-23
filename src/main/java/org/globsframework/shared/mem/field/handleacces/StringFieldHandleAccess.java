@@ -4,6 +4,7 @@ import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.metamodel.fields.StringField;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
+import org.globsframework.core.model.globaccessor.set.GlobSetStringAccessor;
 import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
 import org.globsframework.shared.mem.tree.impl.read.ReadContext;
 import org.globsframework.shared.mem.tree.impl.write.SaveContext;
@@ -18,11 +19,13 @@ public class StringFieldHandleAccess implements HandleAccess {
     private final StringField stringField;
     private final VarHandle varLenHandle;
     private final VarHandle varAddrHandle;
+    private final GlobSetStringAccessor setAccessor;
 
     StringFieldHandleAccess(StringField stringField, VarHandle varLenHandle, VarHandle varAddrHandle) {
         this.stringField = stringField;
         this.varLenHandle = varLenHandle;
         this.varAddrHandle = varAddrHandle;
+        setAccessor = stringField.getGlobType().getSetAccessor(stringField);
     }
 
     public static StringFieldHandleAccess create(GroupLayout groupLayout, StringField stringField) {
@@ -59,10 +62,10 @@ public class StringFieldHandleAccess implements HandleAccess {
             return;
         }
         if (len == -1) {
-            data.set(stringField, null);
+            setAccessor.set(data, null);
             return;
         }
         int addr = (int) varAddrHandle.get(memorySegment, offset);
-        data.set(stringField, readContext.get(addr, len));
+        setAccessor.set(data, readContext.get(addr, len));
     }
 }

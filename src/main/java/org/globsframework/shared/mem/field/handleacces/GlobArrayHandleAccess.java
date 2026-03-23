@@ -5,6 +5,8 @@ import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.metamodel.fields.GlobArrayField;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
+import org.globsframework.core.model.globaccessor.set.GlobSetAccessor;
+import org.globsframework.core.model.globaccessor.set.GlobSetGlobArrayAccessor;
 import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
 import org.globsframework.shared.mem.tree.impl.read.ReadContext;
 import org.globsframework.shared.mem.tree.impl.write.SaveContext;
@@ -19,12 +21,14 @@ public class GlobArrayHandleAccess implements HandleAccess {
     private final VarHandle sequenceVarHandle;
     private final GlobArrayField field;
     private final GlobType targetType;
+    private final GlobSetGlobArrayAccessor setAccessor;
 
     public GlobArrayHandleAccess(VarHandle lenVarHandle, VarHandle sequenceVarHandle, GlobArrayField field) {
         this.lenVarHandle = lenVarHandle;
         this.sequenceVarHandle = sequenceVarHandle;
         this.field = field;
         targetType = field.getTargetType();
+        setAccessor = field.getGlobType().getSetAccessor(field);
     }
 
     public static HandleAccess create(GroupLayout groupLayout, GlobArrayField globField) {
@@ -68,7 +72,7 @@ public class GlobArrayHandleAccess implements HandleAccess {
             return;
         }
         if (len == -1) {
-            data.set(field, null);
+            setAccessor.set(data, null);
             return;
         }
         Glob[] globs = new Glob[len];
@@ -78,7 +82,7 @@ public class GlobArrayHandleAccess implements HandleAccess {
                 globs[i] = readContext.read(targetType, off);
             }
         }
-        data.set(field, globs);
+        setAccessor.set(data, globs);
     }
 
     @Override

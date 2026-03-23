@@ -4,6 +4,8 @@ import org.globsframework.core.metamodel.fields.DateTimeField;
 import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
+import org.globsframework.core.model.globaccessor.set.GlobSetAccessor;
+import org.globsframework.core.model.globaccessor.set.GlobSetDateTimeAccessor;
 import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
 import org.globsframework.shared.mem.tree.impl.read.ReadContext;
 import org.globsframework.shared.mem.tree.impl.write.SaveContext;
@@ -22,6 +24,7 @@ public class DateTimeFieldHandleAccess implements HandleAccess {
     private final VarHandle nanoVarHandle;
     private final VarHandle zoneIdVarHandle;
     private final DateTimeField field;
+    private final GlobSetDateTimeAccessor setAccessor;
 
     public DateTimeFieldHandleAccess(VarHandle dateVarHandle, VarHandle timeVarHandle,
                                      VarHandle nanoVarHandle, VarHandle zoneIdVarHandle, DateTimeField field) {
@@ -30,6 +33,7 @@ public class DateTimeFieldHandleAccess implements HandleAccess {
         this.nanoVarHandle = nanoVarHandle;
         this.zoneIdVarHandle = zoneIdVarHandle;
         this.field = field;
+        setAccessor = field.getGlobType().getSetAccessor(field);
     }
 
     public static HandleAccess create(GroupLayout groupLayout, DateTimeField field) {
@@ -99,7 +103,7 @@ public class DateTimeFieldHandleAccess implements HandleAccess {
         int hour = (val2 >>> 12);
         int minute = (val2 >>> 6) & 0x3F;
         int second = ((int) (val2 & 0x3F));
-        data.set(field, ZonedDateTime.of(year, month, dayOfMonth, hour, minute, second, nano, zoneId));
+        setAccessor.set(data, ZonedDateTime.of(year, month, dayOfMonth, hour, minute, second, nano, zoneId));
     }
 
 }

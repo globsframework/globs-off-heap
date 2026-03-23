@@ -64,7 +64,7 @@ public class HashReadIndex {
             int hash = (int) hashVarHandle.get(memorySegment, offset);
             if (hash == h) {
                 if ((int) isValidVarHandle.get(memorySegment, offset) == 1) {
-                    Glob read = readAndCheck(functionalKey, (long) dataIndexVarHandle.get(memorySegment, offset), readContext, field -> true);
+                    Glob read = readAndCheck(functionalKey, (long) dataIndexVarHandle.get(memorySegment, offset), readContext, null);
                     if (read != null) {
                         return read;
                     }
@@ -82,7 +82,7 @@ public class HashReadIndex {
         for (int i = 0; i < count; i++) {
             long offset = i * byteSizeWithPadding;
             if ((int) isValidVarHandle.get(memorySegment, offset) == 1) {
-                final Glob read = readContext.read((long) dataIndexVarHandle.get(memorySegment, offset), field -> true);
+                final Glob read = readContext.read((long) dataIndexVarHandle.get(memorySegment, offset), null);
                 consumer.accept(read);
             }
         }

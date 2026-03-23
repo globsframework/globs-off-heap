@@ -5,6 +5,8 @@ import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.metamodel.fields.StringField;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
+import org.globsframework.core.model.globaccessor.set.GlobSetAccessor;
+import org.globsframework.core.model.globaccessor.set.GlobSetStringAccessor;
 import org.globsframework.shared.mem.model.Heap7BitsString;
 import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
 import org.globsframework.shared.mem.tree.impl.read.ReadContext;
@@ -21,6 +23,7 @@ public class FixSizeStringFieldHandleAccess implements HandleAccess {
     private final int maxSize;
     private final boolean canTruncate;
     private final ReadLen lenAccess;
+    private final GlobSetStringAccessor setAccessor;
 
     FixSizeStringFieldHandleAccess(StringField stringField, VarHandle varLenHandle, VarHandle varStrHandle) {
         this.stringField = stringField;
@@ -34,7 +37,7 @@ public class FixSizeStringFieldHandleAccess implements HandleAccess {
         else {
             lenAccess = new IntLenAccess(varLenHandle);
         }
-
+        setAccessor = stringField.getGlobType().getSetAccessor(stringField);
     }
 
 
@@ -85,7 +88,7 @@ public class FixSizeStringFieldHandleAccess implements HandleAccess {
     public void readAtOffset(MutableGlob data, MemorySegment memorySegment, long offset, ReadContext readContext) {
         int len = lenAccess.readLen(memorySegment, offset);
         if (len == -1) {
-            data.set(stringField, null);
+            setAccessor.set(data, null);
         }
         else {
             StringBuilder sb = new StringBuilder(len);
@@ -93,7 +96,7 @@ public class FixSizeStringFieldHandleAccess implements HandleAccess {
                 char c = (char) varStrHandle.get(memorySegment, offset, i);
                 sb.append(c);
             }
-            data.set(stringField, sb.toString());
+            setAccessor.set(data, sb.toString());
         }
     }
 

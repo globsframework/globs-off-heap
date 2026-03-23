@@ -5,6 +5,8 @@ import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.metamodel.fields.GlobArrayField;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
+import org.globsframework.core.model.globaccessor.set.GlobSetAccessor;
+import org.globsframework.core.model.globaccessor.set.GlobSetGlobArrayAccessor;
 import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
 import org.globsframework.shared.mem.tree.impl.OffHeapTypeInfo;
 import org.globsframework.shared.mem.tree.impl.read.ReadContext;
@@ -20,12 +22,14 @@ public class GlobArrayInlineHandleAccess implements HandleAccess {
     private final long dataOffset;
     private final GlobArrayField field;
     private final GlobType targetType;
+    private final GlobSetGlobArrayAccessor setAccessor;
 
     public GlobArrayInlineHandleAccess(VarHandle lenHandle, long dataOffset, GlobArrayField field) {
         this.lenHandle = lenHandle;
         this.dataOffset = dataOffset;
         this.field = field;
         targetType = field.getTargetType();
+        setAccessor = field.getGlobType().getSetAccessor(field);
     }
 
     public static HandleAccess create(GroupLayout groupLayout, GlobArrayField globField) {
@@ -71,7 +75,7 @@ public class GlobArrayInlineHandleAccess implements HandleAccess {
             return;
         }
         if (len == -1) {
-            data.set(field, null);
+            setAccessor.setValue(data, null);
             return;
         }
         final OffHeapTypeInfo offHeapTypeInfo = readContext.getOffHeapInlineTypeInfo(targetType);
@@ -87,6 +91,6 @@ public class GlobArrayInlineHandleAccess implements HandleAccess {
             }
             globs[i] = instantiate;
         }
-        data.set(field, globs);
+        setAccessor.set(data, globs);
     }
 }

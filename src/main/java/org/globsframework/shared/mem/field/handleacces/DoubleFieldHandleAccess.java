@@ -4,6 +4,8 @@ import org.globsframework.core.metamodel.fields.DoubleField;
 import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
+import org.globsframework.core.model.globaccessor.set.GlobSetAccessor;
+import org.globsframework.core.model.globaccessor.set.GlobSetDoubleAccessor;
 import org.globsframework.shared.mem.tree.impl.read.ReadContext;
 import org.globsframework.shared.mem.tree.impl.write.SaveContext;
 
@@ -15,10 +17,12 @@ import java.lang.invoke.VarHandle;
 public class DoubleFieldHandleAccess implements HandleAccess {
     private final VarHandle varHandle;
     private final DoubleField field;
+    private final GlobSetDoubleAccessor setAccessor;
 
     public DoubleFieldHandleAccess(VarHandle varHandle, DoubleField field) {
         this.varHandle = varHandle;
         this.field = field;
+        setAccessor = field.getGlobType().getSetAccessor(field);
     }
 
     public static HandleAccess create(GroupLayout groupLayout, DoubleField field) {
@@ -38,6 +42,6 @@ public class DoubleFieldHandleAccess implements HandleAccess {
 
     @Override
     public void readAtOffset(MutableGlob data, MemorySegment memorySegment, long offset, ReadContext readContext) {
-        data.set(field, (double) varHandle.get(memorySegment, offset));
+        setAccessor.set(data, (double) varHandle.get(memorySegment, offset));
     }
 }

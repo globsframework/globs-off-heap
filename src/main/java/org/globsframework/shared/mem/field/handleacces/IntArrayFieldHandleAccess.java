@@ -5,6 +5,8 @@ import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.metamodel.fields.IntegerArrayField;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
+import org.globsframework.core.model.globaccessor.set.GlobSetAccessor;
+import org.globsframework.core.model.globaccessor.set.GlobSetIntArrayAccessor;
 import org.globsframework.core.utils.exceptions.InvalidParameter;
 import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
 import org.globsframework.shared.mem.tree.impl.read.ReadContext;
@@ -20,12 +22,14 @@ public class IntArrayFieldHandleAccess implements HandleAccess {
     private final VarHandle lenHandle;
     private final VarHandle arrayHandle;
     private final Integer size;
+    private final GlobSetIntArrayAccessor setAccessor;
 
     public IntArrayFieldHandleAccess(VarHandle lenHandle, VarHandle arrayHandle, int size, IntegerArrayField field) {
         this.size = size;
         this.field = field;
         this.lenHandle = lenHandle;
         this.arrayHandle = arrayHandle;
+        setAccessor = field.getGlobType().getSetAccessor(field);
     }
 
     public static HandleAccess create(GroupLayout groupLayout, IntegerArrayField field) {
@@ -63,14 +67,14 @@ public class IntArrayFieldHandleAccess implements HandleAccess {
     public void readAtOffset(MutableGlob data, MemorySegment memorySegment, long offset, ReadContext readContext) {
         final int size = (int) lenHandle.get(memorySegment, offset);
         if (size == -1) {
-            data.set(field, null);
-        }
-        if (size >= 0) {
+            setAccessor.set(data, null);
+
+        } else if (size >= 0) {
             int[] value = new int[size];
             for (int i = 0; i < size; i++) {
                 value[i] = (int) arrayHandle.get(memorySegment, offset, i);
             }
-            data.set(field, value);
+            setAccessor.set(data, value);
         }
     }
 }
