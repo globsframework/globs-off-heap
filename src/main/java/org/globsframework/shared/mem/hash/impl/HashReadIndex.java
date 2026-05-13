@@ -28,7 +28,6 @@ public class HashReadIndex {
     public static final VarHandle nextIndexVarHandle;
     public static final VarHandle dataIndexVarHandle;
     public static final VarHandle isValidVarHandle;
-    private final FileChannel indexChannel;
     private final int count;
     private final Arena arena;
     private final MemorySegment memorySegment;
@@ -38,17 +37,18 @@ public class HashReadIndex {
     public HashReadIndex(HashIndex hashIndex, Path path) {
         this.hashIndex = hashIndex;
         try {
-            this.indexChannel = FileChannel.open(
-                    path.resolve(DefaultOffHeapTreeService.createContentFileName(HashWriteIndex.PerData.TYPE, hashIndex.name())), StandardOpenOption.READ);
-            this.count = Math.toIntExact(indexChannel.size() / byteSizeWithPadding);
-            arena = Arena.ofShared();
-            ByteBuffer buffer = ByteBuffer.wrap(new byte[HashWriteIndex.OFFSET_FOR_DATA]);
-            indexChannel.read(buffer);
-            buffer.flip();
-            hashTableSize = Math.toIntExact(buffer.getLong());
-            memorySegment = indexChannel.map(FileChannel.MapMode.READ_ONLY,
-                    HashWriteIndex.OFFSET_FOR_DATA, //long for hash table size
-                    count * byteSizeWithPadding, arena);
+            try (FileChannel indexChannel = FileChannel.open(
+                    path.resolve(DefaultOffHeapTreeService.createContentFileName(HashWriteIndex.PerData.TYPE, hashIndex.name())), StandardOpenOption.READ)) {
+                this.count = Math.toIntExact(indexChannel.size() / byteSizeWithPadding);
+                arena = Arena.ofShared();
+                ByteBuffer buffer = ByteBuffer.wrap(new byte[HashWriteIndex.OFFSET_FOR_DATA]);
+                indexChannel.read(buffer);
+                buffer.flip();
+                hashTableSize = Math.toIntExact(buffer.getLong());
+                memorySegment = indexChannel.map(FileChannel.MapMode.READ_ONLY,
+                        HashWriteIndex.OFFSET_FOR_DATA, //long for hash table size
+                        count * byteSizeWithPadding, arena);
+            }
             memorySegment.load();
         } catch (IOException e) {
             throw new RuntimeException(e);

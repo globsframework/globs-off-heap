@@ -21,7 +21,6 @@ import static org.globsframework.shared.mem.tree.impl.read.DefaultReadOffHeapMan
 public class DefaultReadOffHeapUniqueIndex implements ReadOffHeapUniqueIndex, ReadIndex, AutoCloseable {
     private final OffHeapUniqueIndex offHeapIndex;
     private final StringAccessorByAddress stringAccessor;
-    private final FileChannel indexChannel;
     private final MemorySegment memorySegment;
     private final IndexTypeBuilder indexTypeBuilder;
     private final boolean isEmpty;
@@ -32,10 +31,12 @@ public class DefaultReadOffHeapUniqueIndex implements ReadOffHeapUniqueIndex, Re
         this.stringAccessor = stringAccessor;
         final String indexName = offHeapIndex.getName();
         indexTypeBuilder = new IndexTypeBuilder(indexName, offHeapIndex.getKeyBuilder().getFields());
-        this.indexChannel = FileChannel.open(path.resolve(DefaultOffHeapTreeService.getIndexNameFile(indexName)), StandardOpenOption.READ);
-        final long size = indexChannel.size();
-        isEmpty = size == 0;
-        memorySegment = indexChannel.map(FileChannel.MapMode.READ_ONLY, 0, size, Arena.ofShared());
+        final long size;
+        try (FileChannel indexChannel = FileChannel.open(path.resolve(DefaultOffHeapTreeService.getIndexNameFile(indexName)), StandardOpenOption.READ)) {
+            size = indexChannel.size();
+            isEmpty = size == 0;
+            memorySegment = indexChannel.map(FileChannel.MapMode.READ_ONLY, 0, size, Arena.ofShared());
+        }
         memorySegment.load();
         maxIndex = Math.toIntExact(size / indexTypeBuilder.offHeapIndexTypeInfo.primary().byteSizeWithPadding());
     }
@@ -205,6 +206,5 @@ public class DefaultReadOffHeapUniqueIndex implements ReadOffHeapUniqueIndex, Re
     }
 
     public void close() throws Exception {
-        indexChannel.close();
     }
 }

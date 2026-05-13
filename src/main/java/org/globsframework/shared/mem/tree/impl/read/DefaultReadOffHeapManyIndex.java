@@ -25,8 +25,6 @@ public class DefaultReadOffHeapManyIndex implements ReadOffHeapMultiIndex, ReadI
     public static final VarHandle LONG_VAR_HANDLE = ValueLayout.JAVA_LONG.varHandle();
     private final OffHeapNotUniqueIndex offHeapIndex;
     private final StringAccessorByAddress stringAccessor;
-    private final FileChannel indexChannel;
-    private final FileChannel indexDataRefChannel;
     private final MemorySegment memorySegment;
     private final MemorySegment dataRefMemorySegment;
     private final IndexTypeBuilder indexTypeBuilder;
@@ -40,12 +38,15 @@ public class DefaultReadOffHeapManyIndex implements ReadOffHeapMultiIndex, ReadI
         this.stringAccessor = stringAccessor;
         final String indexName = offHeapIndex.getName();
         indexTypeBuilder = new IndexTypeBuilder(indexName, offHeapIndex.getKeyBuilder().getFields());
-        this.indexChannel = FileChannel.open(path.resolve(DefaultOffHeapTreeService.getIndexNameFile(indexName)), StandardOpenOption.READ);
-        final long size = indexChannel.size();
-        isEmpty = size == 0;
-        this.indexDataRefChannel = FileChannel.open(path.resolve(DefaultOffHeapTreeService.getIndexDataNameFile(indexName)), StandardOpenOption.READ);
-        memorySegment = indexChannel.map(FileChannel.MapMode.READ_ONLY, 0, size, Arena.ofShared());
-        dataRefMemorySegment = indexDataRefChannel.map(FileChannel.MapMode.READ_ONLY, 0, indexDataRefChannel.size(), Arena.ofShared());
+        final long size;
+        try (FileChannel indexChannel = FileChannel.open(path.resolve(DefaultOffHeapTreeService.getIndexNameFile(indexName)), StandardOpenOption.READ)) {
+            size = indexChannel.size();
+            isEmpty = size == 0;
+            memorySegment = indexChannel.map(FileChannel.MapMode.READ_ONLY, 0, size, Arena.ofShared());
+        }
+        try (FileChannel indexDataRefChannel = FileChannel.open(path.resolve(DefaultOffHeapTreeService.getIndexDataNameFile(indexName)), StandardOpenOption.READ)) {
+            dataRefMemorySegment = indexDataRefChannel.map(FileChannel.MapMode.READ_ONLY, 0, indexDataRefChannel.size(), Arena.ofShared());
+        }
         dataRefMemorySegment.load();
         maxIndex = Math.toIntExact(size / indexTypeBuilder.offHeapIndexTypeInfo.primary().byteSizeWithPadding());
     }
@@ -288,10 +289,5 @@ public class DefaultReadOffHeapManyIndex implements ReadOffHeapMultiIndex, ReadI
 
     @Override
     public void close() throws IOException {
-        try {
-            indexChannel.close();
-        } catch (IOException e) {
-        }
-        indexDataRefChannel.close();
     }
 }

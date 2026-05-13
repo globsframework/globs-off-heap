@@ -31,7 +31,6 @@ class OffHeapUpdaterServiceImpl implements OffHeapUpdaterService {
     private final Map<GlobType, OffHeapTypeInfoWithFirstLayout> offHeapTypeInfoMap;
     private final Map<GlobType, SegmentPosition> freePositions = new HashMap<>();
     private final OffsetHeader offsetHeader;
-    private final FileChannel stringChannel;
     private final MappedByteBuffer stringBytesBuffer;
     private final Map<String, StringRef> strOffsets = new HashMap<>();
     private final DefaultOffHeapReadDataService readDataService;
@@ -63,9 +62,11 @@ class OffHeapUpdaterServiceImpl implements OffHeapUpdaterService {
             }
             final Path resolve = directory.resolve(DefaultOffHeapTreeService.STRINGS_DATA);
             if (Files.exists(resolve)) {
-                this.stringChannel = FileChannel.open(resolve, StandardOpenOption.READ, StandardOpenOption.WRITE);
-                long strFileSize = stringChannel.size();
-                this.stringBytesBuffer = stringChannel.map(FileChannel.MapMode.READ_WRITE, 0, stringChannel.size());
+                long strFileSize;
+                try (FileChannel stringChannel = FileChannel.open(resolve, StandardOpenOption.READ, StandardOpenOption.WRITE)) {
+                    strFileSize = stringChannel.size();
+                    this.stringBytesBuffer = stringChannel.map(FileChannel.MapMode.READ_WRITE, 0, stringChannel.size());
+                }
                 stringBytesBuffer.position(0);
                 int len;
                 byte[] cache = new byte[1024];
@@ -88,7 +89,6 @@ class OffHeapUpdaterServiceImpl implements OffHeapUpdaterService {
                             StringRef.create(position, len));
                 }
             } else {
-                stringChannel = null;
                 stringBytesBuffer = null;
             }
 

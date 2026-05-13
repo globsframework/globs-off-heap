@@ -26,12 +26,10 @@ import java.util.*;
 import java.util.function.Predicate;
 
 public class DefaultOffHeapReadDataService implements OffHeapReadDataService, ReadContext {
-    private final FileChannel dataChannel;
     private final MemorySegment memorySegment;
     private final long dataSize;
     private final int count;
     private final RootOffHeapTypeInfo offHeapTypeInfo;
-    private final FileChannel stringChannel;
     private final Arena arena;
     private final GlobInstantiator globInstantiator;
     private final MappedByteBuffer stringBytesBuffer;
@@ -54,12 +52,12 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
             this.globInstantiator = globInstantiator;
             final Path resolve = directory.resolve(DefaultOffHeapTreeService.STRINGS_DATA);
             if (Files.exists(resolve)) {
-                this.stringChannel = FileChannel.open(resolve, StandardOpenOption.READ);
-                this.stringBytesBuffer = stringChannel.map(FileChannel.MapMode.READ_ONLY, 0, stringChannel.size());
+                try (FileChannel stringChannel = FileChannel.open(resolve, StandardOpenOption.READ)) {
+                    this.stringBytesBuffer = stringChannel.map(FileChannel.MapMode.READ_ONLY, 0, stringChannel.size());
+                }
                 stringBytesBuffer.load();
             }
             else {
-                this.stringChannel = null;
                 this.stringBytesBuffer = null;
             }
 
@@ -85,7 +83,6 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
                 }
             }
             if (mainSegment != null) {
-                this.dataChannel = mainSegment.fileChannel();
                 this.count = mainSegment.maxElementCount();
                 this.dataSize = mainSegment.size();
                 this.memorySegment = mainSegment.segment();
@@ -101,13 +98,14 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
     public static TypeSegment loadMemorySegment(Arena arena, FileChannel.MapMode openMode, int offsetForData,
                                                 RootOffHeapTypeInfo subOffHeapTypeInfo, Path pathToFile) throws IOException {
         if (Files.exists(pathToFile)) {
-            FileChannel fileChannel = FileChannel.open(pathToFile, StandardOpenOption.READ, openMode == FileChannel.MapMode.READ_ONLY ? StandardOpenOption.READ : StandardOpenOption.WRITE);
-            final long size = fileChannel.size();
-            int count = Math.toIntExact(size / subOffHeapTypeInfo.primary().byteSizeWithPadding());
-            final MemorySegment subData = fileChannel.map(openMode, 0, size, arena);
-            subData.load();
-            return new TypeSegment(subData.asSlice(offsetForData), subData.asSlice(offsetForData, subOffHeapTypeInfo.primary().byteSizeWithPadding() * count), fileChannel,
-                    subOffHeapTypeInfo, count, size);
+            try (FileChannel fileChannel = FileChannel.open(pathToFile, StandardOpenOption.READ, openMode == FileChannel.MapMode.READ_ONLY ? StandardOpenOption.READ : StandardOpenOption.WRITE)) {
+                final long size = fileChannel.size();
+                int count = Math.toIntExact(size / subOffHeapTypeInfo.primary().byteSizeWithPadding());
+                final MemorySegment subData = fileChannel.map(openMode, 0, size, arena);
+                subData.load();
+                return new TypeSegment(subData.asSlice(offsetForData), subData.asSlice(offsetForData, subOffHeapTypeInfo.primary().byteSizeWithPadding() * count),
+                        subOffHeapTypeInfo, count, size);
+            }
         }
         return null;
     }
@@ -262,16 +260,6 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
     }
 
     public void close() {
-        try {
-            if (stringChannel != null) {
-                stringChannel.close();
-            }
-        } catch (IOException x) {
-        }
-        try {
-            dataChannel.close();
-        } catch (IOException x) {
-        }
     }
 
     @Override

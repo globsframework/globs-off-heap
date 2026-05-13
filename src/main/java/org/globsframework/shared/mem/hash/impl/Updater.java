@@ -32,7 +32,7 @@ public class Updater {
         typeSegment = DefaultOffHeapReadDataService.loadMemorySegment(arena,
                 FileChannel.MapMode.READ_WRITE, HashWriteIndex.OFFSET_FOR_DATA, rootOffHeapTypeInfo,
                 directory.resolve(DefaultOffHeapTreeService.createContentFileName(HashWriteIndex.PerData.TYPE, hashIndex.name())));
-        maxElement = typeSegment.fileChannel().size() / HashReadIndex.byteSizeWithPadding;
+        maxElement = typeSegment.size() / HashReadIndex.byteSizeWithPadding;
     }
 
     public long save(Glob data, long dataOffset, ReadContext readContext) {
