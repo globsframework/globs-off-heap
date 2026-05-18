@@ -21,21 +21,23 @@ import static org.globsframework.shared.mem.tree.impl.read.DefaultReadOffHeapMan
 public class DefaultReadOffHeapUniqueIndex implements ReadOffHeapUniqueIndex, ReadIndex, AutoCloseable {
     private final OffHeapUniqueIndex offHeapIndex;
     private final StringAccessorByAddress stringAccessor;
+    private final Arena arena;
     private final MemorySegment memorySegment;
     private final IndexTypeBuilder indexTypeBuilder;
     private final boolean isEmpty;
     private final int maxIndex;
 
-    public DefaultReadOffHeapUniqueIndex(Path path, OffHeapUniqueIndex offHeapIndex, StringAccessorByAddress stringAccessor) throws IOException {
+    public DefaultReadOffHeapUniqueIndex(Path path, OffHeapUniqueIndex offHeapIndex, StringAccessorByAddress stringAccessor, Arena arena) throws IOException {
         this.offHeapIndex = offHeapIndex;
         this.stringAccessor = stringAccessor;
+        this.arena = arena;
         final String indexName = offHeapIndex.getName();
         indexTypeBuilder = new IndexTypeBuilder(indexName, offHeapIndex.getKeyBuilder().getFields());
         final long size;
         try (FileChannel indexChannel = FileChannel.open(path.resolve(DefaultOffHeapTreeService.getIndexNameFile(indexName)), StandardOpenOption.READ)) {
             size = indexChannel.size();
             isEmpty = size == 0;
-            memorySegment = indexChannel.map(FileChannel.MapMode.READ_ONLY, 0, size, Arena.ofShared());
+            memorySegment = indexChannel.map(FileChannel.MapMode.READ_ONLY, 0, size, this.arena);
         }
         memorySegment.load();
         maxIndex = Math.toIntExact(size / indexTypeBuilder.offHeapIndexTypeInfo.primary().byteSizeWithPadding());

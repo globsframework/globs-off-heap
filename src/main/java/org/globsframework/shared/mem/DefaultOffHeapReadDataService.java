@@ -37,7 +37,7 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
     private final Map<GlobType, TypeSegment> perGlobTypeMap = new HashMap<>();
     private byte[] cache = new byte[1024];
     private final Map<GlobType, OffHeapTypeInfo> inlined = new HashMap<>();
-    private OffHeapTypeInfoAccessor offHeapTypeInfoMap;
+    private final OffHeapTypeInfoAccessor offHeapTypeInfoMap;
 
 
     public DefaultOffHeapReadDataService(Path directory, Arena arena, GlobType mainDataType, OffHeapTypeInfoAccessor offHeapTypeInfoMap,
@@ -70,15 +70,14 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
                 final RootOffHeapTypeInfo subOffHeapTypeInfo = offHeapTypeInfoMap.get(globType);
                 this.inlined.putAll(subOffHeapTypeInfo.inline());
                 final Path pathToFile = directory.resolve(DefaultOffHeapTreeService.createContentFileName(globType));
-                final TypeSegment typeSegment = loadMemorySegment(arena, FileChannel.MapMode.READ_ONLY,
+                final TypeSegment typeSegment = loadMemorySegment(this.arena, FileChannel.MapMode.READ_ONLY,
                         offsetHeader.offsetAtStart(globType), subOffHeapTypeInfo,
                         pathToFile);
                 if (typeSegment != null) {
-                    if (globType != mainDataType) {
-                        perGlobTypeMap.put(globType, typeSegment);
-                    }
-                    else {
+                    if (globType == mainDataType) {
                         mainSegment =  typeSegment;
+                    } else {
+                        perGlobTypeMap.put(globType, typeSegment);
                     }
                 }
             }

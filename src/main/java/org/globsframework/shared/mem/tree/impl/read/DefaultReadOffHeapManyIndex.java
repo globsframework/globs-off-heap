@@ -31,21 +31,23 @@ public class DefaultReadOffHeapManyIndex implements ReadOffHeapMultiIndex, ReadI
     private final LongArray[] arrayCaches = new LongArray[4];
     private final boolean isEmpty;
     private final int maxIndex;
+    private final Arena arena;
     private int firstFreeLongArrayCache = -1;
 
-    public DefaultReadOffHeapManyIndex(Path path, OffHeapNotUniqueIndex offHeapIndex, StringAccessorByAddress stringAccessor) throws IOException {
+    public DefaultReadOffHeapManyIndex(Path path, OffHeapNotUniqueIndex offHeapIndex, StringAccessorByAddress stringAccessor, Arena arena) throws IOException {
         this.offHeapIndex = offHeapIndex;
         this.stringAccessor = stringAccessor;
         final String indexName = offHeapIndex.getName();
         indexTypeBuilder = new IndexTypeBuilder(indexName, offHeapIndex.getKeyBuilder().getFields());
         final long size;
+        this.arena = arena;
         try (FileChannel indexChannel = FileChannel.open(path.resolve(DefaultOffHeapTreeService.getIndexNameFile(indexName)), StandardOpenOption.READ)) {
             size = indexChannel.size();
             isEmpty = size == 0;
-            memorySegment = indexChannel.map(FileChannel.MapMode.READ_ONLY, 0, size, Arena.ofShared());
+            memorySegment = indexChannel.map(FileChannel.MapMode.READ_ONLY, 0, size, this.arena);
         }
         try (FileChannel indexDataRefChannel = FileChannel.open(path.resolve(DefaultOffHeapTreeService.getIndexDataNameFile(indexName)), StandardOpenOption.READ)) {
-            dataRefMemorySegment = indexDataRefChannel.map(FileChannel.MapMode.READ_ONLY, 0, indexDataRefChannel.size(), Arena.ofShared());
+            dataRefMemorySegment = indexDataRefChannel.map(FileChannel.MapMode.READ_ONLY, 0, indexDataRefChannel.size(), this.arena);
         }
         dataRefMemorySegment.load();
         maxIndex = Math.toIntExact(size / indexTypeBuilder.offHeapIndexTypeInfo.primary().byteSizeWithPadding());

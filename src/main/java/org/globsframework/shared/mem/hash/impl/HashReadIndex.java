@@ -34,20 +34,20 @@ public class HashReadIndex {
     private final HashIndex hashIndex;
     private final int hashTableSize;
 
-    public HashReadIndex(HashIndex hashIndex, Path path) {
+    public HashReadIndex(HashIndex hashIndex, Arena arena, Path path) {
         this.hashIndex = hashIndex;
+        this.arena = arena;
         try {
             try (FileChannel indexChannel = FileChannel.open(
                     path.resolve(DefaultOffHeapTreeService.createContentFileName(HashWriteIndex.PerData.TYPE, hashIndex.name())), StandardOpenOption.READ)) {
                 this.count = Math.toIntExact(indexChannel.size() / byteSizeWithPadding);
-                arena = Arena.ofShared();
                 ByteBuffer buffer = ByteBuffer.wrap(new byte[HashWriteIndex.OFFSET_FOR_DATA]);
                 indexChannel.read(buffer);
                 buffer.flip();
                 hashTableSize = Math.toIntExact(buffer.getLong());
                 memorySegment = indexChannel.map(FileChannel.MapMode.READ_ONLY,
                         HashWriteIndex.OFFSET_FOR_DATA, //long for hash table size
-                        count * byteSizeWithPadding, arena);
+                        count * byteSizeWithPadding, this.arena);
             }
             memorySegment.load();
         } catch (IOException e) {

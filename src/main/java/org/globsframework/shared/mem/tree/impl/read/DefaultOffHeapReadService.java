@@ -29,9 +29,9 @@ public class DefaultOffHeapReadService implements OffHeapReadTreeService {
         this.indexMap = new HashMap<>();
         for (Map.Entry<String, Index> entry : index.entrySet()) {
             if (entry.getValue().isUnique()) {
-                indexMap.put(entry.getKey(), new DefaultReadOffHeapUniqueIndex(directory, (OffHeapUniqueIndex) entry.getValue(), readDataService));
+                indexMap.put(entry.getKey(), new DefaultReadOffHeapUniqueIndex(directory, (OffHeapUniqueIndex) entry.getValue(), readDataService, arena));
             } else {
-                indexMap.put(entry.getKey(), new DefaultReadOffHeapManyIndex(directory, (OffHeapNotUniqueIndex) entry.getValue(), readDataService));
+                indexMap.put(entry.getKey(), new DefaultReadOffHeapManyIndex(directory, (OffHeapNotUniqueIndex) entry.getValue(), readDataService, arena));
             }
         }
     }

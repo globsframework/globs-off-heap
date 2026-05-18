@@ -19,6 +19,7 @@ import java.util.Map;
 
 class OffHeapReadHashServiceImpl implements OffHeapReadHashService {
     private final Path directory;
+    private final Arena arena;
     private final List<HashIndex> index;
     private final DefaultOffHeapReadDataService readDataService;
 
@@ -26,6 +27,7 @@ class OffHeapReadHashServiceImpl implements OffHeapReadHashService {
                                       List<HashIndex> index, GlobType type,
                                       HashSet<GlobType> typeToSave, Map<GlobType, OffHeapTypeInfoWithFirstLayout> offHeapTypeInfoMap, OffsetHeader offsetHeader) {
         this.directory = directory;
+        this.arena = arena;
         this.index = index;
         readDataService =
                 new DefaultOffHeapReadDataService(directory, arena, type,
@@ -37,7 +39,7 @@ class OffHeapReadHashServiceImpl implements OffHeapReadHashService {
     public OffHeapHashAccess getReader(String name) {
         HashIndex hashIndex = getHashIndex(name);
 
-        HashReadIndex hashReadIndex = new HashReadIndex(hashIndex, directory);
+        HashReadIndex hashReadIndex = new HashReadIndex(hashIndex, arena, directory);
         return new OffHeapHashAccess() {
             @Override
             public Glob get(FunctionalKey key) {
