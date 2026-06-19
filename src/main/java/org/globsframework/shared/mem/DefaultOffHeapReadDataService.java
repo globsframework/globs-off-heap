@@ -5,6 +5,7 @@ import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.GlobInstantiator;
 import org.globsframework.core.model.MutableGlob;
+import org.globsframework.core.utils.collections.ConcurrentMultiMap;
 import org.globsframework.core.utils.collections.IntHashMap;
 import org.globsframework.shared.mem.field.handleacces.HandleAccess;
 import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
@@ -16,26 +17,31 @@ import org.globsframework.shared.mem.tree.impl.read.TypeSegment;
 import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
-import java.nio.MappedByteBuffer;
+import java.lang.foreign.ValueLayout;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
 public class DefaultOffHeapReadDataService implements OffHeapReadDataService, ReadContext {
+    private static final VarHandle stringLenVarHandle;
+    private static final VarHandle stringBytesVarHandle;
     private final MemorySegment memorySegment;
     private final long dataSize;
     private final int count;
     private final RootOffHeapTypeInfo offHeapTypeInfo;
     private final Arena arena;
     private final GlobInstantiator globInstantiator;
-    private final MappedByteBuffer stringBytesBuffer;
-    private final IntHashMap<String> readStrings = new IntHashMap<>();
+    private final MemorySegment stringMemorySegment;
+    private final Map<Integer, String> readStrings = new ConcurrentHashMap<>(Integer.getInteger("gfw.shared.strings.size", 1000));
     private final Map<GlobType, TypeSegment> perGlobTypeMap = new HashMap<>();
-    private byte[] cache = new byte[1024];
     private final Map<GlobType, OffHeapTypeInfo> inlined = new HashMap<>();
     private final OffHeapTypeInfoAccessor offHeapTypeInfoMap;
 
@@ -53,12 +59,12 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
             final Path resolve = directory.resolve(DefaultOffHeapTreeService.STRINGS_DATA);
             if (Files.exists(resolve)) {
                 try (FileChannel stringChannel = FileChannel.open(resolve, StandardOpenOption.READ)) {
-                    this.stringBytesBuffer = stringChannel.map(FileChannel.MapMode.READ_ONLY, 0, stringChannel.size());
+                    this.stringMemorySegment = stringChannel.map(FileChannel.MapMode.READ_ONLY, 0, stringChannel.size(), arena);
                 }
-                stringBytesBuffer.load();
+                stringMemorySegment.load();
             }
             else {
-                this.stringBytesBuffer = null;
+                this.stringMemorySegment = null;
             }
 
             this.offHeapTypeInfoMap = offHeapTypeInfoMap;
@@ -230,18 +236,17 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
         return instantiate;
     }
 
-    synchronized public String get(int addr, int len) {
+    public String get(int addr, int len) {
         String s = readStrings.get(addr);
         if (s == null) {
-            if (cache.length < len) {
-                cache = new byte[len];
-            }
-            stringBytesBuffer.position(addr - 4);
-            final int writeLen = stringBytesBuffer.getInt();
+            final int writeLen = (int) stringLenVarHandle.get(stringMemorySegment, (long) addr - 4);
             if (writeLen != len) {
                 throw new RuntimeException("Bug : wrong length between wanted: " + len + " and real: " + writeLen);
             }
-            stringBytesBuffer.get(cache, 0, len);
+            byte[] cache = new byte[len];
+            for (int i = 0; i < len; i++) {
+                cache[i] = (byte) stringBytesVarHandle.get(stringMemorySegment, (long) addr + i);
+            }
             s = new String(cache, 0, len, StandardCharsets.UTF_8);
             readStrings.put(addr, s);
         }
@@ -272,5 +277,10 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
         public MutableGlob newGlob(GlobType globType) {
             return globs.computeIfAbsent(globType, GlobType::instantiate);
         }
+    }
+
+    static {
+        stringLenVarHandle = ValueLayout.JAVA_INT_UNALIGNED.withOrder(ByteOrder.BIG_ENDIAN).varHandle();
+        stringBytesVarHandle = ValueLayout.JAVA_BYTE.varHandle();
     }
 }

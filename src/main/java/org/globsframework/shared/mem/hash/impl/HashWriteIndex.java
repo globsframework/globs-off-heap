@@ -30,7 +30,7 @@ public class HashWriteIndex {
     void save(Path path, IdentityHashMap<Glob, Long> offset) throws IOException {
         maxCollisions = 0;
         nbCollisions = 0;
-        OffHeapGlobTypeGroupLayout offHeapGlobTypeGroupLayout = OffHeapGlobTypeGroupLayoutImpl.create(PerData.TYPE);
+        OffHeapGlobTypeGroupLayout offHeapGlobTypeGroupLayout = HashReadIndex.offHeapGlobTypeGroupLayout;
         final RootOffHeapTypeInfo rootOffHeapTypeInfo = new RootOffHeapTypeInfo(OffHeapTypeInfo.create(PerData.TYPE, offHeapGlobTypeGroupLayout.getPrimaryGroupLayout()), Map.of());
         Glob[] index = new Glob[hashIndex.size()];
         List<Glob> linkAtEnd = new ArrayList<>();
@@ -117,8 +117,6 @@ public class HashWriteIndex {
         int n = -1 >>> Integer.numberOfLeadingZeros(cap - 1);
         return (n < 0) ? 1 : (n >= MAXIMUM_CAPACITY) ? MAXIMUM_CAPACITY : n + 1;
     }
-
-
 
     static public class PerData {
         public static GlobType TYPE;

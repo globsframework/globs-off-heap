@@ -22,12 +22,15 @@ import java.nio.file.StandardOpenOption;
 import java.util.function.Predicate;
 
 public class HashReadIndex {
+    public static final OffHeapGlobTypeGroupLayoutImpl offHeapGlobTypeGroupLayout;
+    public static final GroupLayout groupLayout;
     public static final long byteSizeWithPadding;
     public static final long byteSize;
     public static final VarHandle hashVarHandle;
     public static final VarHandle nextIndexVarHandle;
     public static final VarHandle dataIndexVarHandle;
     public static final VarHandle isValidVarHandle;
+
     private final int count;
     private final Arena arena;
     private final MemorySegment memorySegment;
@@ -101,8 +104,8 @@ public class HashReadIndex {
     }
 
     static {
-        final OffHeapGlobTypeGroupLayoutImpl offHeapGlobTypeGroupLayout = OffHeapGlobTypeGroupLayoutImpl.create(HashWriteIndex.PerData.TYPE);
-        final GroupLayout groupLayout = offHeapGlobTypeGroupLayout.getPrimaryGroupLayout();
+        offHeapGlobTypeGroupLayout = OffHeapGlobTypeGroupLayoutImpl.create(HashWriteIndex.PerData.TYPE);
+        groupLayout = offHeapGlobTypeGroupLayout.getPrimaryGroupLayout();
         byteSizeWithPadding = OffHeapTypeInfo.computeSizeWithPadding(groupLayout);
         byteSize = groupLayout.byteSize();
         hashVarHandle = groupLayout.varHandle(MemoryLayout.PathElement.groupElement(HashWriteIndex.PerData.hash.getName()));

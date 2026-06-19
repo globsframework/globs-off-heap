@@ -146,9 +146,12 @@ class OffHeapUpdaterServiceImpl implements OffHeapUpdaterService {
             }
         }
         for (String s : toSave) {
+            final byte[] bytes = s.getBytes(StandardCharsets.UTF_8);
+            if (lastFreeStringOffset + bytes.length + 4 > stringBytesBuffer.capacity()) {
+                throw new RuntimeException("No more space for strings. Growth not yet supported.");
+            }
             int currentOffset = lastFreeStringOffset;
             stringBytesBuffer.position(lastFreeStringOffset);
-            final byte[] bytes = s.getBytes(StandardCharsets.UTF_8);
             stringBytesBuffer.putInt(bytes.length);
             stringBytesBuffer.put(bytes);
             lastFreeStringOffset += bytes.length + 4;
@@ -238,6 +241,7 @@ class OffHeapUpdaterServiceImpl implements OffHeapUpdaterService {
                 segmentPosition.setToFree(offset, now);
             });
         }
+        freePositions.get(type).setToFree(previousDataIndex, now);
     }
 
     private static class FreeReferenceOffset implements HandleAccess.ReferenceOffset {

@@ -43,7 +43,7 @@ public class Updater {
         if ((previousDataOffset = updateIfFound(readContext, tableIndex, h, functionalKey, dataOffset)) != -1) {
             return previousDataOffset;
         }
-        long offset = tableIndex * HashReadIndex.byteSizeWithPadding;
+        long offset = (long) tableIndex * HashReadIndex.byteSizeWithPadding;
         int previousNext = 0;
         int nextIndex;
         while (true) {
@@ -52,21 +52,21 @@ public class Updater {
                 HashReadIndex.hashVarHandle.set(typeSegment.segment(), offset, h);
                 HashReadIndex.nextIndexVarHandle.set(typeSegment.segment(), offset, previousNext);
                 HashReadIndex.isValidVarHandle.setRelease(typeSegment.segment(), offset, 1);
-                return previousDataOffset;
+                return -1;
             }
             nextIndex = (int) HashReadIndex.nextIndexVarHandle.get(typeSegment.segment(), offset);
             if (nextIndex <= 0) {
                 break;
             }
-            offset = nextIndex * HashReadIndex.byteSizeWithPadding;
+            offset = (long) nextIndex * HashReadIndex.byteSizeWithPadding;
         }
         {
             int freeOffset = findFreePosition();
 
-            HashReadIndex.nextIndexVarHandle.set(typeSegment.segment(), freeOffset, 0);
-            HashReadIndex.dataIndexVarHandle.set(typeSegment.segment(), freeOffset, dataOffset);
-            HashReadIndex.hashVarHandle.set(typeSegment.segment(), freeOffset, h);
-            HashReadIndex.isValidVarHandle.set(typeSegment.segment(), freeOffset, 1);
+            HashReadIndex.nextIndexVarHandle.set(typeSegment.segment(), (long) freeOffset * HashReadIndex.byteSizeWithPadding, 0);
+            HashReadIndex.dataIndexVarHandle.set(typeSegment.segment(), (long) freeOffset * HashReadIndex.byteSizeWithPadding, dataOffset);
+            HashReadIndex.hashVarHandle.set(typeSegment.segment(), (long) freeOffset * HashReadIndex.byteSizeWithPadding, h);
+            HashReadIndex.isValidVarHandle.set(typeSegment.segment(), (long) freeOffset * HashReadIndex.byteSizeWithPadding, 1);
 
             HashReadIndex.nextIndexVarHandle.setRelease(typeSegment.segment(), offset, freeOffset);
         }
@@ -74,7 +74,7 @@ public class Updater {
     }
 
     private long updateIfFound(ReadContext readContext, int tableIndex, int h, FunctionalKey functionalKey, long dataOffset) {
-        long offset = tableIndex * HashReadIndex.byteSizeWithPadding;
+        long offset = (long) tableIndex * HashReadIndex.byteSizeWithPadding;
         while (true) {
             final MemorySegment segment = typeSegment.segment();
             int hash = (int) HashReadIndex.hashVarHandle.get(segment, offset);
@@ -93,19 +93,19 @@ public class Updater {
             if (nextIndex <= 0) {
                 break;
             }
-            offset = nextIndex * HashReadIndex.byteSizeWithPadding;
+            offset = (long) nextIndex * HashReadIndex.byteSizeWithPadding;
         }
         return -1;
     }
 
     private int findFreePosition() {
-        int offset = tableSize;
+        int index = tableSize;
         final MemorySegment segment = typeSegment.segment();
-        while (maxElement < offset) {
-            if ((int) HashReadIndex.isValidVarHandle.get(segment, offset * HashReadIndex.byteSizeWithPadding) == 2) {
-                return offset;
+        while (index < maxElement) {
+            if ((int) HashReadIndex.isValidVarHandle.get(segment, (long) index * HashReadIndex.byteSizeWithPadding) == 2) {
+                return index;
             }
-            offset++;
+            index++;
         }
         throw new RuntimeException("No free position found");
     }
