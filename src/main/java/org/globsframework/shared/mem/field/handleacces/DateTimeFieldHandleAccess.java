@@ -56,7 +56,7 @@ public class DateTimeFieldHandleAccess implements HandleAccess {
     public void save(Glob data, MemorySegment memorySegment, long offset, SaveContext saveContext) {
         final ZonedDateTime value = data.get(field);
         if (value == null) {
-            dateVarHandle.set(offset, Integer.MIN_VALUE);
+            dateVarHandle.set(memorySegment, offset, Integer.MIN_VALUE);
             return;
         }
         int val1 = (value.getYear() & 0xFFFFF) << 9 | value.getMonthValue() << 5 | value.getDayOfMonth();
@@ -88,7 +88,7 @@ public class DateTimeFieldHandleAccess implements HandleAccess {
         int val2 = (int)timeVarHandle.get(memorySegment, offset);
         int nano =  (int)nanoVarHandle.get(memorySegment, offset);
         byte[] array = new byte[DefaultOffHeapTreeService.DATE_TIME_MAX_ZONE_ID_SIZE];
-        int len = 0;
+        int len = DefaultOffHeapTreeService.DATE_TIME_MAX_ZONE_ID_SIZE;
         for (int i = 0; i < DefaultOffHeapTreeService.DATE_TIME_MAX_ZONE_ID_SIZE; i++) {
             array[i] = (byte)zoneIdVarHandle.get(memorySegment, offset, i);
             if (array[i] == ' ') {

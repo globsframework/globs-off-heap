@@ -17,6 +17,10 @@ import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.invoke.VarHandle;
 
+
+/*
+  Do not support null glob in the array.
+ */
 public class GlobArrayInlineHandleAccess implements HandleAccess {
     private final VarHandle lenHandle;
     private final long dataOffset;

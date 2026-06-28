@@ -89,7 +89,11 @@ class OffHeapUpdaterServiceImpl implements OffHeapUpdaterService {
                             StringRef.create(position, len));
                 }
             } else {
-                stringBytesBuffer = null;
+                try (FileChannel stringChannel = FileChannel.open(resolve,
+                        StandardOpenOption.READ, StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW)) {
+                    this.stringBytesBuffer = stringChannel.map(FileChannel.MapMode.READ_WRITE, 0, 64 * 1024);
+                }
+                lastFreeStringOffset = 0;
             }
 
             readDataService =
@@ -120,10 +124,13 @@ class OffHeapUpdaterServiceImpl implements OffHeapUpdaterService {
             offHeapTypeInfo.freeIdHandle.set(typeSegment.segment(), dataOffset, timestamp);
         }
 
-        public Long nexFree(long now) {
+        public Long nexFree(long now, Set<Long> reserved) {
             final long size = typeSegment.offHeapTypeInfo().primary().byteSizeWithPadding();
             for (long i = 0; i < typeSegment.maxElementCount(); i++) {
                 final long at = i * size;
+                if (reserved.contains(at)) {
+                    continue;
+                }
                 long timestamp = (long) offHeapTypeInfo.freeIdHandle.get(typeSegment.segment(), at);
                 if (timestamp != 0 && (now - timestamp) > 1000) {
                     return at;
@@ -147,7 +154,7 @@ class OffHeapUpdaterServiceImpl implements OffHeapUpdaterService {
         }
         for (String s : toSave) {
             final byte[] bytes = s.getBytes(StandardCharsets.UTF_8);
-            if (lastFreeStringOffset + bytes.length + 4 > stringBytesBuffer.capacity()) {
+            if (lastFreeStringOffset < 0 || lastFreeStringOffset + bytes.length + 4 > stringBytesBuffer.capacity()) {
                 throw new RuntimeException("No more space for strings. Growth not yet supported.");
             }
             int currentOffset = lastFreeStringOffset;
@@ -169,8 +176,11 @@ class OffHeapUpdaterServiceImpl implements OffHeapUpdaterService {
         for (Map.Entry<GlobType, IdentityHashMap<Glob, Glob>> globTypeIdentityHashMapEntry : extracted.entrySet()) {
             final IdentityHashMap<Glob, Long> target = new IdentityHashMap<>();
             dataOffsets.put(globTypeIdentityHashMapEntry.getKey(), target);
+            final Set<Long> reserved = new HashSet<>();
             for (Glob glob : globTypeIdentityHashMapEntry.getValue().keySet()) {
-                target.put(glob, freePositions.get(globTypeIdentityHashMapEntry.getKey()).nexFree(now));
+                long offset = freePositions.get(globTypeIdentityHashMapEntry.getKey()).nexFree(now, reserved);
+                reserved.add(offset);
+                target.put(glob, offset);
             }
         }
 

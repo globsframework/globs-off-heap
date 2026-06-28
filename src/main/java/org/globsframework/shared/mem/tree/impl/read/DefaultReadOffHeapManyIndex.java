@@ -231,15 +231,15 @@ public class DefaultReadOffHeapManyIndex implements ReadOffHeapMultiIndex, ReadI
         }
     }
 
-    public void free(OffHeapRefs offHeapRefs) {
-        if (firstFreeLongArrayCache < arrayCaches.length) {
+    synchronized public void free(OffHeapRefs offHeapRefs) {
+        if (firstFreeLongArrayCache < arrayCaches.length - 1) {
             final LongArray offset = offHeapRefs.offset();
             offset.free();
             arrayCaches[++firstFreeLongArrayCache] = offset;
         }
     }
 
-    LongArray getArrays(int size) {
+    synchronized LongArray getArrays(int size) {
         if (firstFreeLongArrayCache < 0) {
             return new LongArray(new long[size]);
         } else {

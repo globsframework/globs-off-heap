@@ -16,6 +16,7 @@ import org.globsframework.shared.mem.hash.OffHeapUpdaterService;
 import org.globsframework.shared.mem.hash.OffHeapWriteHashService;
 import org.globsframework.shared.mem.impl.Dummy1Type;
 import org.globsframework.shared.mem.impl.Dummy2Type;
+import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -170,6 +171,46 @@ class OffHeapHashServiceImplTest {
             val1 = typeBuilder.declareLongField("val1");
             TYPE = typeBuilder.build();
         }
+    }
+
+    @Test
+    void updateCreatesStringsFileWhenAbsent() throws IOException {
+        OffHeapHashServiceImpl offHeapHashService = new OffHeapHashServiceImpl(Dummy1Type.TYPE);
+        final FunctionalKeyBuilder keyBuilder = FunctionalKeyBuilderFactory.create(Dummy1Type.TYPE)
+                .add(Dummy1Type.id)
+                .create();
+        offHeapHashService.declare("id", keyBuilder, 200);
+
+        // Save initial data with null names — DataSaver skips strings file when no strings present
+        List<Glob> globs = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            globs.add(Dummy1Type.create(i, null, null, Dummy2Type.create("sub " + i)));
+        }
+        Path storagePath = Files.createTempDirectory("offheap-hash-no-strings");
+
+        final OffHeapWriteHashService writer = offHeapHashService.createWriter(storagePath);
+        writer.save(globs);
+
+        // Simulate missing strings file (e.g. initial dataset had no strings)
+        Files.deleteIfExists(storagePath.resolve(DefaultOffHeapTreeService.STRINGS_DATA));
+        Assertions.assertFalse(Files.exists(storagePath.resolve(DefaultOffHeapTreeService.STRINGS_DATA)),
+                "strings file must not exist before creating updater");
+
+        // Before fix: NPE in createUpdater() because stringBytesBuffer stayed null
+        final OffHeapUpdaterService updater = offHeapHashService.createUpdater(storagePath, Arena.ofShared());
+
+        Assertions.assertTrue(Files.exists(storagePath.resolve(DefaultOffHeapTreeService.STRINGS_DATA)),
+                "strings file must be created by the updater");
+
+        // update() with a non-null string must not throw
+        updater.update(Dummy1Type.create(0, "hello", null, Dummy2Type.create("sub 0")));
+
+        final OffHeapReadHashService readService =
+                offHeapHashService.createReader(storagePath, Arena.ofShared(), GlobType::instantiate);
+        final OffHeapHashAccess reader = readService.getReader("id");
+        final Glob result = reader.get(keyBuilder.create().set(Dummy1Type.id, 0).create());
+        assertNotNull(result);
+        assertEquals("hello", result.get(Dummy1Type.name));
     }
 
     @Test
