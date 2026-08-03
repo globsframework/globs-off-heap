@@ -5,7 +5,6 @@ import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.metamodel.fields.GlobField;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
-import org.globsframework.core.model.globaccessor.set.GlobSetAccessor;
 import org.globsframework.core.model.globaccessor.set.GlobSetGlobAccessor;
 import org.globsframework.shared.mem.tree.impl.read.ReadContext;
 import org.globsframework.shared.mem.tree.impl.write.SaveContext;
@@ -17,18 +16,18 @@ import java.lang.invoke.VarHandle;
 
 public class GlobHandleAccess implements HandleAccess {
     private final VarHandle offsetVarHandle;
-    private final GlobField field;
+    private final GlobField<?> field;
     private final GlobType targetType;
     private final GlobSetGlobAccessor setAccessor;
 
-    public GlobHandleAccess(VarHandle offsetVarHandle, GlobField field) {
+    public GlobHandleAccess(VarHandle offsetVarHandle, GlobField<?> field) {
         this.offsetVarHandle = offsetVarHandle;
         this.field = field;
         targetType = field.getTargetType();
         setAccessor = field.getGlobType().getSetAccessor(field);
     }
 
-    public static HandleAccess create(GroupLayout groupLayout, GlobField globField) {
+    public static HandleAccess create(GroupLayout groupLayout, GlobField<?> globField) {
         final VarHandle dataVarHandle = groupLayout.varHandle(MemoryLayout.PathElement.groupElement(globField.getName()));
         return new GlobHandleAccess(dataVarHandle, globField);
     }
@@ -67,7 +66,7 @@ public class GlobHandleAccess implements HandleAccess {
     }
 
     @Override
-    public void scanOffset(MemorySegment memorySegment, long offset, ReferenceOffset referenceOffset){
+    public void scanOffset(MemorySegment memorySegment, long offset, ReferenceOffset referenceOffset) {
         long dataOffset = (long) offsetVarHandle.get(memorySegment, offset);
         if (dataOffset != -2 && dataOffset != -1) {
             referenceOffset.onRef(targetType, dataOffset);

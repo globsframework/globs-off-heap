@@ -84,7 +84,7 @@ class GroupLayoutFieldVisitor extends FieldVisitor.AbstractWithErrorVisitor {
         currentPos += 4;
     }
 
-    public void visitGlob(GlobField field) throws Exception {
+    public void visitGlob(GlobField<?> field) throws Exception {
         final Glob annotation = field.findAnnotation(HeapInline.UNIQUE_KEY);
         if (annotation != null) {
             fieldsLayout.add(ValueLayout.JAVA_BYTE.withName(field.getName() + DefaultOffHeapTreeService.GLOB_SET));// 1 null, 2 unset
@@ -101,7 +101,7 @@ class GroupLayoutFieldVisitor extends FieldVisitor.AbstractWithErrorVisitor {
     }
 
     @Override
-    public void visitGlobArray(GlobArrayField field) throws Exception {
+    public void visitGlobArray(GlobArrayField<?> field) throws Exception {
         final Integer size = field.getAnnotation(HeapMaxElement.UNIQUE_KEY)
                 .getNotNull(HeapMaxElement.maxSize);
         final Glob annotation = field.findAnnotation(HeapInline.UNIQUE_KEY);

@@ -28,7 +28,7 @@ public class GlobArrayInlineHandleAccess implements HandleAccess {
     private final GlobType targetType;
     private final GlobSetGlobArrayAccessor setAccessor;
 
-    public GlobArrayInlineHandleAccess(VarHandle lenHandle, long dataOffset, GlobArrayField field) {
+    public GlobArrayInlineHandleAccess(VarHandle lenHandle, long dataOffset, GlobArrayField<?> field) {
         this.lenHandle = lenHandle;
         this.dataOffset = dataOffset;
         this.field = field;
@@ -36,7 +36,7 @@ public class GlobArrayInlineHandleAccess implements HandleAccess {
         setAccessor = field.getGlobType().getSetAccessor(field);
     }
 
-    public static HandleAccess create(GroupLayout groupLayout, GlobArrayField globField) {
+    public static HandleAccess create(GroupLayout groupLayout, GlobArrayField<?> globField) {
         final VarHandle lenHandle =
                 groupLayout.varHandle(MemoryLayout.PathElement.groupElement(globField.getName() + DefaultOffHeapTreeService.GLOB_LEN));
         final long dataOffset = groupLayout.byteOffset(MemoryLayout.PathElement.groupElement(globField.getName()));

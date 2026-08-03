@@ -16,9 +16,9 @@ public class Dummy1Type {
 
     public static final StringField name;
 
-    public static final GlobField subObjectInline;
+    public static final GlobField<Dummy2Type> subObjectInline;
 
-    public static final GlobField subObject;
+    public static final GlobField<Dummy2Type> subObject;
 
     public static Glob create(int id, String name, Glob subObjectInline, Glob subObject) {
         return TYPE.instantiate()

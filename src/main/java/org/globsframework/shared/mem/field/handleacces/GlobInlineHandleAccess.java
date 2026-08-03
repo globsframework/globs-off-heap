@@ -5,7 +5,6 @@ import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.metamodel.fields.GlobField;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
-import org.globsframework.core.model.globaccessor.set.GlobSetAccessor;
 import org.globsframework.core.model.globaccessor.set.GlobSetGlobAccessor;
 import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
 import org.globsframework.shared.mem.tree.impl.OffHeapTypeInfo;
@@ -20,11 +19,11 @@ import java.lang.invoke.VarHandle;
 public class GlobInlineHandleAccess implements HandleAccess {
     private final VarHandle byteIsSetHandle;
     private final long dataOffset;
-    private final GlobField field;
+    private final GlobField<?> field;
     private final GlobType targetType;
     private final GlobSetGlobAccessor setAccessor;
 
-    public GlobInlineHandleAccess(VarHandle byteIsSetHandle, long dataOffset, GlobField field) {
+    public GlobInlineHandleAccess(VarHandle byteIsSetHandle, long dataOffset, GlobField<?> field) {
         this.byteIsSetHandle = byteIsSetHandle;
         this.dataOffset = dataOffset;
         this.field = field;
@@ -32,7 +31,7 @@ public class GlobInlineHandleAccess implements HandleAccess {
         setAccessor = field.getGlobType().getSetAccessor(field);
     }
 
-    public static HandleAccess create(GroupLayout groupLayout, GlobField globField) {
+    public static HandleAccess create(GroupLayout groupLayout, GlobField<?> globField) {
         final VarHandle byteIsSetHandle =
                 groupLayout.varHandle(MemoryLayout.PathElement.groupElement(globField.getName() + DefaultOffHeapTreeService.GLOB_SET));
         final long dataOffset = groupLayout.byteOffset(MemoryLayout.PathElement.groupElement(globField.getName()));

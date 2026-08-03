@@ -40,12 +40,12 @@ public class OffHeapTypeInfo {
                         FixSizeStringFieldHandleAccess.create(groupLayout, strField) :
                         StringFieldHandleAccess.create(groupLayout, strField);
                 case DateField dateField -> DateFieldHandleAccess.create(groupLayout, dateField);
-                case GlobField globField -> globField.hasAnnotation(HeapInline.UNIQUE_KEY) ?
+                case GlobField<?> globField -> globField.hasAnnotation(HeapInline.UNIQUE_KEY) ?
                         GlobInlineHandleAccess.create(groupLayout, globField) : GlobHandleAccess.create(groupLayout, globField);
                 case DateTimeField dateField -> DateTimeFieldHandleAccess.create(groupLayout, dateField);
                 case IntegerArrayField integerArrayField ->
                         IntArrayFieldHandleAccess.create(groupLayout, integerArrayField);
-                case GlobArrayField globArrayField -> globArrayField.hasAnnotation(HeapInline.UNIQUE_KEY) ?
+                case GlobArrayField<?> globArrayField -> globArrayField.hasAnnotation(HeapInline.UNIQUE_KEY) ?
                         GlobArrayInlineHandleAccess.create(groupLayout, globArrayField) : GlobArrayHandleAccess.create(groupLayout, globArrayField);
                 default ->
                         throw new RuntimeException("Field " + field.getDataType() + " not supported for " + field.getFullName());

@@ -23,7 +23,7 @@ public class GlobArrayHandleAccess implements HandleAccess {
     private final GlobType targetType;
     private final GlobSetGlobArrayAccessor setAccessor;
 
-    public GlobArrayHandleAccess(VarHandle lenVarHandle, VarHandle sequenceVarHandle, GlobArrayField field) {
+    public GlobArrayHandleAccess(VarHandle lenVarHandle, VarHandle sequenceVarHandle, GlobArrayField<?> field) {
         this.lenVarHandle = lenVarHandle;
         this.sequenceVarHandle = sequenceVarHandle;
         this.field = field;
@@ -31,7 +31,7 @@ public class GlobArrayHandleAccess implements HandleAccess {
         setAccessor = field.getGlobType().getSetAccessor(field);
     }
 
-    public static HandleAccess create(GroupLayout groupLayout, GlobArrayField globField) {
+    public static HandleAccess create(GroupLayout groupLayout, GlobArrayField<?> globField) {
         final VarHandle lenVarHandle = groupLayout.varHandle(MemoryLayout.PathElement.groupElement(globField.getName() + DefaultOffHeapTreeService.GLOB_LEN));
         final VarHandle sequenceVarHandle = groupLayout.varHandle(MemoryLayout.PathElement.groupElement(globField.getName()), MemoryLayout.PathElement.sequenceElement());
         return new GlobArrayHandleAccess(lenVarHandle, sequenceVarHandle, globField);

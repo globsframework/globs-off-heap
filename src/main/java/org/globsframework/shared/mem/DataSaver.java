@@ -71,13 +71,13 @@ public class DataSaver {
                         extractTypeWithVarSize(targetType, globTypes, visited);
                     }
                 }
-                case GlobArrayField f -> {
+                case GlobArrayField<?> f -> {
                     if (!f.hasAnnotation(HeapInline.UNIQUE_KEY)) {
                         globTypes.add(f.getTargetType());
                     }
                     extractTypeWithVarSize(f.getTargetType(), globTypes, visited);
                 }
-                case GlobField f -> {
+                case GlobField<?> f -> {
                     if (!f.hasAnnotation(HeapInline.UNIQUE_KEY)) {
                         globTypes.add(f.getTargetType());
                     }
@@ -165,7 +165,7 @@ public class DataSaver {
             final boolean notNull = glob.isNotNull(field);
             if (notNull) {
                 switch (field) {
-                    case GlobField f -> {
+                    case GlobField<?> f -> {
                         Glob g = glob.get(f);
                         if (!f.hasAnnotation(HeapInline.UNIQUE_KEY)) {
                             result.computeIfAbsent(g.getType(), type -> new IdentityHashMap<>()).put(g, g);
@@ -173,7 +173,7 @@ public class DataSaver {
                         extractGlobToSave(g, result);
                     }
                     case GlobUnionField f -> extractGlobToSave(glob.get(f), result);
-                    case GlobArrayField f -> Stream.of(glob.get(f)).filter(Objects::nonNull).forEach(g -> {
+                    case GlobArrayField<?> f -> Stream.of(glob.get(f)).filter(Objects::nonNull).forEach(g -> {
                         if (!f.hasAnnotation(HeapInline.UNIQUE_KEY)) {
                             result.computeIfAbsent(g.getType(), type -> new IdentityHashMap<>()).put(g, g);
                         }
@@ -327,7 +327,7 @@ public class DataSaver {
                 allStrings.put(glob.get(stringField), new StringRef());
             }
         }
-        for (GlobField globField : fieldToScan.globFields) {
+        for (GlobField<?> globField : fieldToScan.globFields) {
             final Glob g = glob.get(globField);
             if (g != null) {
                 index = scanForString(allStrings, stringFieldsMap, g, index);
@@ -339,7 +339,7 @@ public class DataSaver {
                 index = scanForString(allStrings, stringFieldsMap, g, index);
             }
         }
-        for (GlobArrayField field : fieldToScan.globArrayFields) {
+        for (GlobArrayField<?> field : fieldToScan.globArrayFields) {
             for (Glob g : glob.getOrEmpty(field)) {
                 if (g != null) {
                     index = scanForString(allStrings, stringFieldsMap, g, index);
@@ -376,7 +376,7 @@ public class DataSaver {
         //callback other save.
     }
 
-    record FieldToScan(StringField[] stringFields, GlobField[] globFields, GlobArrayField[] globArrayFields,
+    record FieldToScan(StringField[] stringFields, GlobField<?>[] globFields, GlobArrayField<?>[] globArrayFields,
                        GlobUnionField[] globUnionFields, GlobArrayUnionField[] globArrayUnionFields) {
     }
 
