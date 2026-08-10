@@ -16,9 +16,9 @@ public class Dummy2Type {
 
     public static final StringField name;
 
-    public static final GlobArrayField subObjectsInline;
+    public static final GlobArrayField<Dummy3Type> subObjectsInline;
 
-    public static final GlobArrayField subObjects;
+    public static final GlobArrayField<Dummy3Type> subObjects;
 
     public static final IntegerField aligned;
 

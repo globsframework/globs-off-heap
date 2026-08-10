@@ -5,7 +5,6 @@ import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.metamodel.fields.GlobArrayField;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
-import org.globsframework.core.model.globaccessor.set.GlobSetAccessor;
 import org.globsframework.core.model.globaccessor.set.GlobSetGlobArrayAccessor;
 import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
 import org.globsframework.shared.mem.tree.impl.read.ReadContext;
@@ -19,7 +18,7 @@ import java.lang.invoke.VarHandle;
 public class GlobArrayHandleAccess implements HandleAccess {
     private final VarHandle lenVarHandle;
     private final VarHandle sequenceVarHandle;
-    private final GlobArrayField field;
+    private final GlobArrayField<?> field;
     private final GlobType targetType;
     private final GlobSetGlobArrayAccessor setAccessor;
 
