@@ -127,7 +127,7 @@ Still on the table, in rough order of what a profile says:
   values *out* of a Glob), so it maps onto `save`, not onto `readAtOffset`. Reading needs either a
   `MethodHandle` chain built at startup (no new dependency, but a wide type can blow the inlining budget) or
   a new setter-side SPI in core. Note also that `globs` is pinned at 5.10.0 here, which predates
-  `model/generate`.
+  `model/generate/read`.
 - `readStrings` is a `Map<Integer, String>`, so every interned-string read boxes its address (`IntHashMap` is
   already imported there, unused).
 - every scalar field is boxed on its way into `DefaultGlob`'s `Object[]` — `GlobSetIntAccessor.set` takes an
