@@ -72,12 +72,9 @@ public final class GlobInlineHandleAccess implements HandleAccess {
             setAccessor.set(data, null);
             return;
         }
-        final HandleAccess[] handleAccesses = readContext.getOffHeapInlineTypeInfo(targetType).handleAccesses;
         final MutableGlob instantiate = readContext.newGlob(targetType);
         final MemorySegment slice = memorySegment.asSlice(offset + dataOffset);
-        for (HandleAccess handleAccess : handleAccesses) {
-            handleAccess.readAtOffset(instantiate, slice, 0, readContext);
-        }
+        readContext.getOffHeapInlineTypeInfo(targetType).reader.read(instantiate, slice, 0, readContext);
         setAccessor.set(data, instantiate);
     }
 }

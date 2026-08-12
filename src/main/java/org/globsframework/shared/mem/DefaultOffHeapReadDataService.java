@@ -11,6 +11,8 @@ import org.globsframework.shared.mem.field.handleacces.HandleAccess;
 import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
 import org.globsframework.shared.mem.tree.impl.OffHeapTypeInfo;
 import org.globsframework.shared.mem.tree.impl.RootOffHeapTypeInfo;
+import org.globsframework.shared.mem.tree.impl.read.GlobReader;
+import org.globsframework.shared.mem.tree.impl.read.PartitionedGlobReader;
 import org.globsframework.shared.mem.tree.impl.read.ReadContext;
 import org.globsframework.shared.mem.tree.impl.read.TypeSegment;
 
@@ -118,10 +120,10 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
     @Override
     public int read(long[] offset, DataConsumer consumer) {
         final int size = offset.length;
-        final HandleAccess[] handleAccesses = offHeapTypeInfo.primary().handleAccesses;
+        final GlobReader reader = offHeapTypeInfo.primary().reader;
         final GlobType type = offHeapTypeInfo.primary().type;
         for (int i = 0; i < size; i++) {
-            consumer.accept(readGlob(memorySegment, offset[i], this, handleAccesses, type, null));
+            consumer.accept(readGlob(memorySegment, offset[i], this, reader, type));
         }
         return size;
     }
@@ -146,12 +148,12 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
         final long groupSize = offHeapTypeInfo.primary().groupLayout.byteSize();
         final GlobType type = offHeapTypeInfo.primary().type;
         long offset = 0;
-        final HandleAccess[] handleAccesses = offHeapTypeInfo.primary().handleAccesses;
+        final GlobReader reader = offHeapTypeInfo.primary().reader;
         while (true) {
             if (offset + groupSize > dataSize) {
                 return;
             }
-            final MutableGlob instantiate = readGlob(memorySegment, offset, readContext, handleAccesses, type, null);
+            final MutableGlob instantiate = readGlob(memorySegment, offset, readContext, reader, type);
             consumer.accept(instantiate);
             offset += groupSize;
         }
@@ -161,13 +163,14 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
     public void readAll(DataConsumer consumer, Predicate<Field> onlyFields) throws IOException {
         final long groupSize = offHeapTypeInfo.primary().groupLayout.byteSize();
         final GlobType type = offHeapTypeInfo.primary().type;
-        final HandleAccess[] accesses = getHandleAccesses(onlyFields);
+        // the subset is resolved once for the whole walk, not per record
+        final GlobReader reader = PartitionedGlobReader.create(getHandleAccesses(onlyFields));
         long offset = 0;
         while (true) {
             if (offset + groupSize > dataSize) {
                 return;
             }
-            final MutableGlob instantiate = readGlob(memorySegment, offset, this, accesses, type,  field -> true);
+            final MutableGlob instantiate = readGlob(memorySegment, offset, this, reader, type);
             consumer.accept(instantiate);
             offset += groupSize;
         }
@@ -184,14 +187,9 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
     }
 
     private MutableGlob readGlob(MemorySegment memorySegment, long offset, ReadContext readContext,
-                                 HandleAccess[] handleAccesses, GlobType type, Predicate<Field> onlyFields) {
-        if (onlyFields != null) {
-            return filteredRead(memorySegment, offset, readContext, handleAccesses, type, onlyFields);
-        }
+                                 GlobReader reader, GlobType type) {
         final MutableGlob instantiate = globInstantiator.newGlob(type);
-        for (HandleAccess handleAccess : handleAccesses) {
-            handleAccess.readAtOffset(instantiate, memorySegment, offset, readContext);
-        }
+        reader.read(instantiate, memorySegment, offset, readContext);
         return instantiate;
     }
 
@@ -210,8 +208,8 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
         if (offset == -1) {
             return null;
         }
-        return readGlob(memorySegment, offset, this, offHeapTypeInfo.primary().handleAccesses,
-                offHeapTypeInfo.primary().type, null);
+        return readGlob(memorySegment, offset, this, offHeapTypeInfo.primary().reader,
+                offHeapTypeInfo.primary().type);
     }
 
     @Override
@@ -219,7 +217,10 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
         if (offset == -1) {
             return null;
         }
-        return readGlob(memorySegment, offset, this, offHeapTypeInfo.primary().handleAccesses,
+        if (onlyFields == null) {   // the hash read path asks for the whole record this way
+            return read(offset);
+        }
+        return filteredRead(memorySegment, offset, this, offHeapTypeInfo.primary().handleAccesses,
                 offHeapTypeInfo.primary().type, onlyFields);
     }
 
@@ -230,9 +231,7 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
             throw new RuntimeException("Bug " + targetType.getName() + " not found");
         }
         final MutableGlob instantiate = globInstantiator.newGlob(targetType);
-        for (HandleAccess handleAccess : typeSegment.offHeapTypeInfo().primary().handleAccesses) {
-            handleAccess.readAtOffset(instantiate, typeSegment.segment(), dataOffset, this);
-        }
+        typeSegment.offHeapTypeInfo().primary().reader.read(instantiate, typeSegment.segment(), dataOffset, this);
         return instantiate;
     }
 

@@ -8,6 +8,7 @@ import org.globsframework.core.model.MutableGlob;
 import org.globsframework.core.model.globaccessor.set.GlobSetGlobArrayAccessor;
 import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
 import org.globsframework.shared.mem.tree.impl.OffHeapTypeInfo;
+import org.globsframework.shared.mem.tree.impl.read.GlobReader;
 import org.globsframework.shared.mem.tree.impl.read.ReadContext;
 import org.globsframework.shared.mem.tree.impl.write.SaveContext;
 
@@ -82,16 +83,13 @@ public final class GlobArrayInlineHandleAccess implements HandleAccess {
             return;
         }
         final OffHeapTypeInfo offHeapTypeInfo = readContext.getOffHeapInlineTypeInfo(targetType);
-        final HandleAccess[] handleAccesses = offHeapTypeInfo.handleAccesses;
+        final GlobReader reader = offHeapTypeInfo.reader;
         final long size = offHeapTypeInfo.byteSize();
         Glob[] globs = new Glob[len];
         final MemorySegment arraySegment = memorySegment.asSlice(offset + dataOffset);
         for (int i = 0; i < globs.length; i++) {
             final MutableGlob instantiate = readContext.newGlob(targetType);
-            final long inArrayOffset = i * size;
-            for (HandleAccess handleAccess : handleAccesses) {
-                handleAccess.readAtOffset(instantiate, arraySegment, inArrayOffset, readContext);
-            }
+            reader.read(instantiate, arraySegment, i * size, readContext);
             globs[i] = instantiate;
         }
         setAccessor.set(data, globs);
