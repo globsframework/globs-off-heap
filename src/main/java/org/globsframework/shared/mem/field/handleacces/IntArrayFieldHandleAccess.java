@@ -15,20 +15,24 @@ import org.globsframework.shared.mem.tree.impl.write.SaveContext;
 import java.lang.foreign.GroupLayout;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.lang.invoke.VarHandle;
 
 public class IntArrayFieldHandleAccess implements HandleAccess {
     private final IntegerArrayField field;
     private final VarHandle lenHandle;
     private final VarHandle arrayHandle;
+    private final long arrayBaseOffset;
     private final Integer size;
     private final GlobSetIntArrayAccessor setAccessor;
 
-    public IntArrayFieldHandleAccess(VarHandle lenHandle, VarHandle arrayHandle, int size, IntegerArrayField field) {
+    public IntArrayFieldHandleAccess(VarHandle lenHandle, VarHandle arrayHandle, long arrayBaseOffset,
+                                     int size, IntegerArrayField field) {
         this.size = size;
         this.field = field;
         this.lenHandle = lenHandle;
         this.arrayHandle = arrayHandle;
+        this.arrayBaseOffset = arrayBaseOffset;
         setAccessor = field.getGlobType().getSetAccessor(field);
     }
 
@@ -38,7 +42,9 @@ public class IntArrayFieldHandleAccess implements HandleAccess {
         final VarHandle arrayHandle = groupLayout.varHandle(
                 MemoryLayout.PathElement.groupElement(field.getName()),
                 MemoryLayout.PathElement.sequenceElement());
-        return new IntArrayFieldHandleAccess(lenHandle, arrayHandle, size, field);
+        // the byte offset of the sequence inside the record : what a bulk copy needs
+        final long arrayBaseOffset = groupLayout.byteOffset(MemoryLayout.PathElement.groupElement(field.getName()));
+        return new IntArrayFieldHandleAccess(lenHandle, arrayHandle, arrayBaseOffset, size, field);
     }
 
     @Override
@@ -71,9 +77,8 @@ public class IntArrayFieldHandleAccess implements HandleAccess {
 
         } else if (size >= 0) {
             int[] value = new int[size];
-            for (int i = 0; i < size; i++) {
-                value[i] = (int) arrayHandle.get(memorySegment, offset, i);
-            }
+            // one bulk copy rather than size VarHandle calls
+            MemorySegment.copy(memorySegment, ValueLayout.JAVA_INT, offset + arrayBaseOffset, value, 0, size);
             setAccessor.set(data, value);
         }
     }

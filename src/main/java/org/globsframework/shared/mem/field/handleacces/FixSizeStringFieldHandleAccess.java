@@ -15,19 +15,23 @@ import org.globsframework.shared.mem.tree.impl.write.SaveContext;
 import java.lang.foreign.GroupLayout;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.lang.invoke.VarHandle;
 
 public class FixSizeStringFieldHandleAccess implements HandleAccess {
     private final StringField stringField;
     private final VarHandle varStrHandle;
+    private final long strBaseOffset;
     private final int maxSize;
     private final boolean canTruncate;
     private final ReadLen lenAccess;
     private final GlobSetStringAccessor setAccessor;
 
-    FixSizeStringFieldHandleAccess(StringField stringField, VarHandle varLenHandle, VarHandle varStrHandle) {
+    FixSizeStringFieldHandleAccess(StringField stringField, VarHandle varLenHandle, VarHandle varStrHandle,
+                                   long strBaseOffset) {
         this.stringField = stringField;
         this.varStrHandle = varStrHandle;
+        this.strBaseOffset = strBaseOffset;
         final Glob maxSize = stringField.getAnnotation(MaxSize.KEY);
         this.maxSize = maxSize.getNotNull(MaxSize.VALUE);
         canTruncate = maxSize.isTrue(MaxSize.ALLOW_TRUNCATE);
@@ -52,10 +56,13 @@ public class FixSizeStringFieldHandleAccess implements HandleAccess {
         final VarHandle strHandle =
                 groupLayout.varHandle(MemoryLayout.PathElement.groupElement(stringField.getName()),
                         MemoryLayout.PathElement.sequenceElement());
+        // the byte offset of the character sequence inside the record : what a bulk copy needs, where the
+        // indexed VarHandle only gave one element at a time
+        final long strBaseOffset = groupLayout.byteOffset(MemoryLayout.PathElement.groupElement(stringField.getName()));
         if (stringField.hasAnnotation(Heap7BitsString.UNIQUE_KEY)) {
-            return new FixSize7BitsStringFieldHandleAccess(stringField, lenHandle, strHandle);
-        }else {
-            return new FixSizeStringFieldHandleAccess(stringField, lenHandle, strHandle);
+            return new FixSize7BitsStringFieldHandleAccess(stringField, lenHandle, strHandle, strBaseOffset);
+        } else {
+            return new FixSizeStringFieldHandleAccess(stringField, lenHandle, strHandle, strBaseOffset);
         }
     }
 
@@ -90,13 +97,15 @@ public class FixSizeStringFieldHandleAccess implements HandleAccess {
         if (len == -1) {
             setAccessor.set(data, null);
         }
+        else if (len == 0) {
+            setAccessor.set(data, "");
+        }
         else {
-            StringBuilder sb = new StringBuilder(len);
-            for (int i = 0; i < len; i++) {
-                char c = (char) varStrHandle.get(memorySegment, offset, i);
-                sb.append(c);
-            }
-            setAccessor.set(data, sb.toString());
+            // one bulk copy rather than len VarHandle calls into a StringBuilder, which allocated its own
+            // buffer and then copied it again in toString()
+            final char[] chars = new char[len];
+            MemorySegment.copy(memorySegment, ValueLayout.JAVA_CHAR, offset + strBaseOffset, chars, 0, len);
+            setAccessor.set(data, new String(chars, 0, len));
         }
     }
 

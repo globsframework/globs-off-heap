@@ -244,9 +244,9 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
                 throw new RuntimeException("Bug : wrong length between wanted: " + len + " and real: " + writeLen);
             }
             byte[] cache = new byte[len];
-            for (int i = 0; i < len; i++) {
-                cache[i] = (byte) stringBytesVarHandle.get(stringMemorySegment, (long) addr + i);
-            }
+            // one bulk copy rather than len VarHandle calls -- only on a miss, but a miss is every string
+            // the first time the data is walked
+            MemorySegment.copy(stringMemorySegment, ValueLayout.JAVA_BYTE, addr, cache, 0, len);
             s = new String(cache, 0, len, StandardCharsets.UTF_8);
             readStrings.put(addr, s);
         }

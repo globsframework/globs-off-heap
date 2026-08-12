@@ -13,8 +13,10 @@ import org.globsframework.shared.mem.tree.impl.write.SaveContext;
 import java.lang.foreign.GroupLayout;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
+import java.lang.foreign.ValueLayout;
 import java.lang.invoke.VarHandle;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 
@@ -23,15 +25,32 @@ public class DateTimeFieldHandleAccess implements HandleAccess {
     private final VarHandle timeVarHandle;
     private final VarHandle nanoVarHandle;
     private final VarHandle zoneIdVarHandle;
+    private final long zoneIdBaseOffset;
     private final DateTimeField field;
     private final GlobSetDateTimeAccessor setAccessor;
 
+    /**
+     * Last zone id decoded, kept as the raw bytes next to the ZoneId they parse to. Records overwhelmingly
+     * share one zone, and ZoneId.of is a String allocation plus a map lookup plus validation -- comparing a
+     * few bytes is far cheaper. Volatile and immutable : a race just recomputes, it cannot publish a
+     * half-built pair.
+     */
+    private volatile CachedZone cachedZone = new CachedZone(new byte[0], null);
+
+    private record CachedZone(byte[] bytes, ZoneId zoneId) {
+        boolean matches(byte[] other, int len) {
+            return bytes.length == len && Arrays.equals(bytes, 0, len, other, 0, len);
+        }
+    }
+
     public DateTimeFieldHandleAccess(VarHandle dateVarHandle, VarHandle timeVarHandle,
-                                     VarHandle nanoVarHandle, VarHandle zoneIdVarHandle, DateTimeField field) {
+                                     VarHandle nanoVarHandle, VarHandle zoneIdVarHandle, long zoneIdBaseOffset,
+                                     DateTimeField field) {
         this.dateVarHandle = dateVarHandle;
         this.timeVarHandle = timeVarHandle;
         this.nanoVarHandle = nanoVarHandle;
         this.zoneIdVarHandle = zoneIdVarHandle;
+        this.zoneIdBaseOffset = zoneIdBaseOffset;
         this.field = field;
         setAccessor = field.getGlobType().getSetAccessor(field);
     }
@@ -44,6 +63,8 @@ public class DateTimeFieldHandleAccess implements HandleAccess {
                 groupLayout.varHandle(
                         MemoryLayout.PathElement.groupElement(field.getName() + DefaultOffHeapTreeService.DATE_TIME_ZONE_ID_SUFFIX),
                         MemoryLayout.PathElement.sequenceElement()),
+                groupLayout.byteOffset(MemoryLayout.PathElement.groupElement(
+                        field.getName() + DefaultOffHeapTreeService.DATE_TIME_ZONE_ID_SUFFIX)),
                 field);
     }
 
@@ -87,16 +108,25 @@ public class DateTimeFieldHandleAccess implements HandleAccess {
         }
         int val2 = (int)timeVarHandle.get(memorySegment, offset);
         int nano =  (int)nanoVarHandle.get(memorySegment, offset);
+        // one bulk copy rather than up to 52 VarHandle calls, then the space padding tells the real length
         byte[] array = new byte[DefaultOffHeapTreeService.DATE_TIME_MAX_ZONE_ID_SIZE];
+        MemorySegment.copy(memorySegment, ValueLayout.JAVA_BYTE, offset + zoneIdBaseOffset, array, 0,
+                DefaultOffHeapTreeService.DATE_TIME_MAX_ZONE_ID_SIZE);
         int len = DefaultOffHeapTreeService.DATE_TIME_MAX_ZONE_ID_SIZE;
         for (int i = 0; i < DefaultOffHeapTreeService.DATE_TIME_MAX_ZONE_ID_SIZE; i++) {
-            array[i] = (byte)zoneIdVarHandle.get(memorySegment, offset, i);
             if (array[i] == ' ') {
                 len = i;
                 break;
             }
         }
-        final ZoneId zoneId = ZoneId.of(new String(array, 0, len, StandardCharsets.US_ASCII));
+        final CachedZone cached = cachedZone;
+        final ZoneId zoneId;
+        if (cached.matches(array, len)) {
+            zoneId = cached.zoneId();
+        } else {
+            zoneId = ZoneId.of(new String(array, 0, len, StandardCharsets.US_ASCII));
+            cachedZone = new CachedZone(Arrays.copyOf(array, len), zoneId);
+        }
         int year = (val1 >>> 9);
         int month = (val1 >>> 5) & 0xF;
         int dayOfMonth = ((int) (val1 & 0x1F));
