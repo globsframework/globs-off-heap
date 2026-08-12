@@ -24,6 +24,12 @@ classpath); there is no runner `main` and no shade plugin, so run them from the 
 classpath through `org.openjdk.jmh.Main`. `FindPerf` measures the index descent alone; `ReadPerf` measures
 what an application does with the offset it gets back — see "What a read costs" below. `OffHeapExample` is the README example as a `main`, not a test.
 
+`ReadPerf` reads **four different GlobTypes** in round-robin (`PerfTypeFamily`) and runs over a `shape` param
+(`narrow` = the 15 fields of `TestShared.DummyObject1`, `wide` = 45). Both axes matter and neither is
+decoration: going from one type to four costs `read` 27 % and `find` **60 %**, so any number measured on a
+single type is an upper bound nothing in production will see. Numbers from before that change (`read` at
+2537 k) are not comparable with the ones below.
+
 Several tests write to fixed paths (`/tmp/test`, `/tmp/testEmpty`, `/tmp/offheap-example`) and reuse them
 across classes; newer ones use `Files.createTempDirectory`. Prefer the latter when adding tests — stale data
 in the fixed directories has caused confusing failures.
@@ -32,7 +38,7 @@ in the fixed directories has caused confusing failures.
 
 Serializes `Glob`s into flat, fixed-stride records in memory-mapped files, addressed by byte offset, and
 reads them back with zero copying beyond the `Glob` instance itself. Everything is derived from the
-`GlobType` at startup; the per-record path is an array walk with `VarHandle`s.
+`GlobType` at startup; the per-record path is an array walk over precomputed byte offsets.
 
 Two independent storage families share the same layout/field machinery:
 
@@ -58,8 +64,8 @@ Startup, once per `GlobType`:
    inserting explicit padding itself and naming each member after the field. Composite kinds get several
    named members, using the suffix constants on `DefaultOffHeapTreeService` (`_len_`, `_addr_`, `_set_`,
    `_date_`/`_time_`/`_nano_`/`_zoneId_`). Cycles are rejected.
-3. `OffHeapTypeInfo.create` switches once per field to build a `HandleAccess[]`, each holding the
-   `VarHandle`s resolved from the layout. `RootOffHeapTypeInfo` = primary layout + the inline sub-layouts.
+3. `OffHeapTypeInfo.create` switches once per field to build a `HandleAccess[]`, each holding the byte
+   offsets resolved from the layout. `RootOffHeapTypeInfo` = primary layout + the inline sub-layouts.
 
 Runtime: `save`/`readAtOffset` loop over `HandleAccess[]` at a record offset. Nothing reflects, nothing
 re-resolves a handle. `IndexTypeBuilder` does the same for index records, but with `DataAccess`
@@ -71,16 +77,29 @@ re-resolves a handle. `IndexTypeBuilder` does the same for index records, but wi
 
 ## What a read costs
 
-Measured with `ReadPerf` on a 14-field type: the index descent is **6.5 M ops/s** and materializing one Glob
-is **2.5 M** — so `find` is cheap and `read` is where the time goes, by a factor of ~2.5 now and ~40 before
-the bulk copies below. Optimize the read path, not the descent.
+Measured with `ReadPerf`, four types, narrow / wide: the index descent is **2.67 M / 2.69 M ops/s** and
+materializing one Glob is **3.91 M / 1.54 M**. On a narrow record `find` and `read` now cost about the same;
+on a wide one `read` is still where the time goes. Optimize the read path, not the descent.
+
+**No `VarHandle` on the record path.** Every `HandleAccess` resolves its byte offset once, at `create` time,
+with `groupLayout.byteOffset(PathElement.groupElement(name))`, and reads through
+`memorySegment.get(ValueLayout.JAVA_INT, offset + fieldOffset)`. This is not cosmetic and it is the single
+biggest thing measured here: **`read` 1867 k → 3913 k (narrow) and 619 k → 1535 k (wide)**, `readAll` +91 % /
++76 %, while `find` — untouched, and therefore the control — moved 5-8 %. The reason is that the
+`HandleAccess[]` loop is megamorphic, so the receiver is not a JIT constant, so a `VarHandle` held in one of
+its fields is not a constant either and the access falls off its intrinsic path; a `ValueLayout` constant plus
+an offset add does not care who the receiver is. Note what this says about the dispatch itself: the call site
+is exactly as megamorphic as before, and the read still doubled.
+
+The index side (`field/dataaccess`) **keeps its `VarHandle`s** — it addresses a record inside a sequence, and
+the offset is not known before the descent. That is why `FixSizeStringFieldHandleAccess` carries two length
+readers: `RecordLen` (offset-based, record path) and `ReadLen` (`VarHandle`-based, index path, with
+`readLenArray`).
 
 Four field readers used to walk the segment **one element at a time through an indexed `VarHandle`**, which is
-what made a read cost 6.2 µs instead of 0.39 µs (`read` went from 162 k to 2537 k ops/s, `findAndRead` from
-154 k to 1721 k). All four now do a single `MemorySegment.copy`, and the shape to keep is: resolve the byte
-offset of the sequence **once**, at `create` time, with
-`groupLayout.byteOffset(PathElement.groupElement(name))` — the indexed `VarHandle` can only hand over one
-element, so a bulk copy needs the base offset next to it.
+what made a read cost 6.2 µs instead of 0.39 µs (on the old single-type harness, `read` went from 162 k to
+2537 k ops/s). All four now do a single `MemorySegment.copy`, which needs the same base offset next to it —
+an indexed `VarHandle` could only ever hand over one element.
 
 - fixed-size strings (`@MaxSize`), both kinds — they also built a `StringBuilder`, which allocated a buffer
   and then copied it again in `toString()`. The `Heap7BitsString` variant decodes with `ISO_8859_1`: `save`
@@ -97,12 +116,26 @@ element, so a bulk copy needs the base offset next to it.
 `BulkReadRoundTripTest` is the guard: empty and full-width strings, a byte above 127 on the "7 bits" kind,
 null vs empty, and **alternating zone ids** (long then short, so a stale memo cannot match on a prefix).
 
-Still on the table, in rough order of what a profile says: the `HandleAccess[]` loop is one megamorphic call
-site for ~17 implementations; `readStrings` is a `Map<Integer, String>`, so every interned-string read boxes
-its address (`IntHashMap` is already imported there, unused); and every scalar field is boxed on its way into
-`DefaultGlob`'s `Object[]`, which is the one place globs-generate's *primitive* flavour would pay — the
-`GlobInstantiator` is injectable. `read(offset, Predicate<Field>)` already exists and is the cheapest win for
-a caller that only wants a few fields of a wide record.
+Still on the table, in rough order of what a profile says:
+
+- the `HandleAccess[]` loop is still one megamorphic call site for ~14 implementations. Now that the
+  `VarHandle`s are gone the remaining cost of it is the missed inlining, not a slow access — worth attacking
+  by partitioning the array by field kind so each loop walks a `final` concrete class and is monomorphic. The
+  classes are already `final` for that.
+- a fully unrolled per-type reader is the analogue of what globs-grpc and globs-bin-serialisation do with
+  core's `GenerateCaller` — but that SPI is **write-direction only** (`call(Glob data, ctx1, ctx2)` pulls
+  values *out* of a Glob), so it maps onto `save`, not onto `readAtOffset`. Reading needs either a
+  `MethodHandle` chain built at startup (no new dependency, but a wide type can blow the inlining budget) or
+  a new setter-side SPI in core. Note also that `globs` is pinned at 5.10.0 here, which predates
+  `model/generate`.
+- `readStrings` is a `Map<Integer, String>`, so every interned-string read boxes its address (`IntHashMap` is
+  already imported there, unused).
+- every scalar field is boxed on its way into `DefaultGlob`'s `Object[]` — `GlobSetIntAccessor.set` takes an
+  `Integer` and `setNative` is a `default` that just calls it. This is the one place globs-generate's
+  *primitive* flavour would pay, and only a setter-side generated caller would collect it; the
+  `GlobInstantiator` is injectable.
+- `read(offset, Predicate<Field>)` already exists and is the cheapest win for a caller that only wants a few
+  fields of a wide record.
 
 ## Encoding conventions to preserve
 

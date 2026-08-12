@@ -13,25 +13,25 @@ import org.globsframework.shared.mem.tree.impl.write.StringRef;
 import java.lang.foreign.GroupLayout;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
-import java.lang.invoke.VarHandle;
+import java.lang.foreign.ValueLayout;
 
-public class StringFieldHandleAccess implements HandleAccess {
+public final class StringFieldHandleAccess implements HandleAccess {
     private final StringField stringField;
-    private final VarHandle varLenHandle;
-    private final VarHandle varAddrHandle;
+    private final long lenOffset;
+    private final long addrOffset;
     private final GlobSetStringAccessor setAccessor;
 
-    StringFieldHandleAccess(StringField stringField, VarHandle varLenHandle, VarHandle varAddrHandle) {
+    StringFieldHandleAccess(StringField stringField, long lenOffset, long addrOffset) {
         this.stringField = stringField;
-        this.varLenHandle = varLenHandle;
-        this.varAddrHandle = varAddrHandle;
+        this.lenOffset = lenOffset;
+        this.addrOffset = addrOffset;
         setAccessor = stringField.getGlobType().getSetAccessor(stringField);
     }
 
     public static StringFieldHandleAccess create(GroupLayout groupLayout, StringField stringField) {
-        final VarHandle lenHandle = groupLayout.varHandle(MemoryLayout.PathElement.groupElement(stringField.getName() + DefaultOffHeapTreeService.STRING_SUFFIX_LEN));
-        final VarHandle addHandle = groupLayout.varHandle(MemoryLayout.PathElement.groupElement(stringField.getName() + DefaultOffHeapTreeService.STRING_SUFFIX_ADDR));
-        return new StringFieldHandleAccess(stringField, lenHandle, addHandle);
+        final long lenOffset = groupLayout.byteOffset(MemoryLayout.PathElement.groupElement(stringField.getName() + DefaultOffHeapTreeService.STRING_SUFFIX_LEN));
+        final long addrOffset = groupLayout.byteOffset(MemoryLayout.PathElement.groupElement(stringField.getName() + DefaultOffHeapTreeService.STRING_SUFFIX_ADDR));
+        return new StringFieldHandleAccess(stringField, lenOffset, addrOffset);
     }
 
     @Override
@@ -42,22 +42,22 @@ public class StringFieldHandleAccess implements HandleAccess {
     @Override
     public void save(Glob data, MemorySegment memorySegment, long offset, SaveContext saveContext) {
         if (!data.isSet(stringField)) {
-            varLenHandle.set(memorySegment, offset, -2);
+            memorySegment.set(ValueLayout.JAVA_INT, offset + lenOffset, -2);
             return;
         }
         final String str = data.get(stringField);
         if (str == null) {
-            varLenHandle.set(memorySegment, offset, -1);
+            memorySegment.set(ValueLayout.JAVA_INT, offset + lenOffset, -1);
             return;
         }
         final StringRef stringAddress = saveContext.stringAddrAccessor().get(str);
-        varLenHandle.set(memorySegment, offset, stringAddress.len);
-        varAddrHandle.set(memorySegment, offset, stringAddress.offset);
+        memorySegment.set(ValueLayout.JAVA_INT, offset + lenOffset, stringAddress.len);
+        memorySegment.set(ValueLayout.JAVA_INT, offset + addrOffset, stringAddress.offset);
     }
 
     @Override
     public void readAtOffset(MutableGlob data, MemorySegment memorySegment, long offset, ReadContext readContext) {
-        int len = (int) varLenHandle.get(memorySegment, offset);
+        int len = memorySegment.get(ValueLayout.JAVA_INT, offset + lenOffset);
         if (len == -2) {
             return;
         }
@@ -65,7 +65,7 @@ public class StringFieldHandleAccess implements HandleAccess {
             setAccessor.set(data, null);
             return;
         }
-        int addr = (int) varAddrHandle.get(memorySegment, offset);
+        int addr = memorySegment.get(ValueLayout.JAVA_INT, offset + addrOffset);
         setAccessor.set(data, readContext.get(addr, len));
     }
 }

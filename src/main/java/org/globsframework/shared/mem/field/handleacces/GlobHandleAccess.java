@@ -12,24 +12,24 @@ import org.globsframework.shared.mem.tree.impl.write.SaveContext;
 import java.lang.foreign.GroupLayout;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
-import java.lang.invoke.VarHandle;
+import java.lang.foreign.ValueLayout;
 
-public class GlobHandleAccess implements HandleAccess {
-    private final VarHandle offsetVarHandle;
+public final class GlobHandleAccess implements HandleAccess {
+    private final long refOffset;
     private final GlobField<?> field;
     private final GlobType targetType;
     private final GlobSetGlobAccessor setAccessor;
 
-    public GlobHandleAccess(VarHandle offsetVarHandle, GlobField<?> field) {
-        this.offsetVarHandle = offsetVarHandle;
+    public GlobHandleAccess(long refOffset, GlobField<?> field) {
+        this.refOffset = refOffset;
         this.field = field;
         targetType = field.getTargetType();
         setAccessor = field.getGlobType().getSetAccessor(field);
     }
 
     public static HandleAccess create(GroupLayout groupLayout, GlobField<?> globField) {
-        final VarHandle dataVarHandle = groupLayout.varHandle(MemoryLayout.PathElement.groupElement(globField.getName()));
-        return new GlobHandleAccess(dataVarHandle, globField);
+        final long refOffset = groupLayout.byteOffset(MemoryLayout.PathElement.groupElement(globField.getName()));
+        return new GlobHandleAccess(refOffset, globField);
     }
 
     @Override
@@ -40,20 +40,20 @@ public class GlobHandleAccess implements HandleAccess {
     @Override
     public void save(Glob data, MemorySegment memorySegment, long offset, SaveContext saveContext) {
         if (!data.isSet(field)) {
-            offsetVarHandle.set(memorySegment, offset, -2L);
+            memorySegment.set(ValueLayout.JAVA_LONG, offset + refOffset, -2L);
             return;
         }
         Glob glob = data.get(field);
         if (glob == null) {
-            offsetVarHandle.set(memorySegment, offset, -1L);
+            memorySegment.set(ValueLayout.JAVA_LONG, offset + refOffset, -1L);
         } else {
-            offsetVarHandle.set(memorySegment, offset, saveContext.getOffset(targetType, glob));
+            memorySegment.set(ValueLayout.JAVA_LONG, offset + refOffset, saveContext.getOffset(targetType, glob));
         }
     }
 
     @Override
     public void readAtOffset(MutableGlob data, MemorySegment memorySegment, long offset, ReadContext readContext) {
-        long dataOffset = (long) offsetVarHandle.get(memorySegment, offset);
+        long dataOffset = memorySegment.get(ValueLayout.JAVA_LONG, offset + refOffset);
         if (dataOffset == -2) {
             return;
         }
@@ -67,7 +67,7 @@ public class GlobHandleAccess implements HandleAccess {
 
     @Override
     public void scanOffset(MemorySegment memorySegment, long offset, ReferenceOffset referenceOffset) {
-        long dataOffset = (long) offsetVarHandle.get(memorySegment, offset);
+        long dataOffset = memorySegment.get(ValueLayout.JAVA_LONG, offset + refOffset);
         if (dataOffset != -2 && dataOffset != -1) {
             referenceOffset.onRef(targetType, dataOffset);
         }

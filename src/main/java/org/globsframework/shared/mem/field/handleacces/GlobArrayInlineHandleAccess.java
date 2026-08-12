@@ -14,21 +14,21 @@ import org.globsframework.shared.mem.tree.impl.write.SaveContext;
 import java.lang.foreign.GroupLayout;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
-import java.lang.invoke.VarHandle;
+import java.lang.foreign.ValueLayout;
 
 
 /*
   Do not support null glob in the array.
  */
-public class GlobArrayInlineHandleAccess implements HandleAccess {
-    private final VarHandle lenHandle;
+public final class GlobArrayInlineHandleAccess implements HandleAccess {
+    private final long lenOffset;
     private final long dataOffset;
     private final GlobArrayField<?> field;
     private final GlobType targetType;
     private final GlobSetGlobArrayAccessor setAccessor;
 
-    public GlobArrayInlineHandleAccess(VarHandle lenHandle, long dataOffset, GlobArrayField<?> field) {
-        this.lenHandle = lenHandle;
+    public GlobArrayInlineHandleAccess(long lenOffset, long dataOffset, GlobArrayField<?> field) {
+        this.lenOffset = lenOffset;
         this.dataOffset = dataOffset;
         this.field = field;
         targetType = field.getTargetType();
@@ -36,10 +36,10 @@ public class GlobArrayInlineHandleAccess implements HandleAccess {
     }
 
     public static HandleAccess create(GroupLayout groupLayout, GlobArrayField<?> globField) {
-        final VarHandle lenHandle =
-                groupLayout.varHandle(MemoryLayout.PathElement.groupElement(globField.getName() + DefaultOffHeapTreeService.GLOB_LEN));
+        final long lenOffset =
+                groupLayout.byteOffset(MemoryLayout.PathElement.groupElement(globField.getName() + DefaultOffHeapTreeService.GLOB_LEN));
         final long dataOffset = groupLayout.byteOffset(MemoryLayout.PathElement.groupElement(globField.getName()));
-        return new GlobArrayInlineHandleAccess(lenHandle, dataOffset, globField);
+        return new GlobArrayInlineHandleAccess(lenOffset, dataOffset, globField);
     }
 
     @Override
@@ -50,13 +50,13 @@ public class GlobArrayInlineHandleAccess implements HandleAccess {
     @Override
     public void save(Glob data, MemorySegment memorySegment, long offset, SaveContext saveContext) {
         if (!data.isSet(field)) {
-            lenHandle.set(memorySegment, offset, -2);
+            memorySegment.set(ValueLayout.JAVA_INT, offset + lenOffset, -2);
         } else {
             Glob[] glob = data.get(field);
             if (glob == null) {
-                lenHandle.set(memorySegment, offset, -1);
+                memorySegment.set(ValueLayout.JAVA_INT, offset + lenOffset, -1);
             } else {
-                lenHandle.set(memorySegment, offset, glob.length);
+                memorySegment.set(ValueLayout.JAVA_INT, offset + lenOffset, glob.length);
                 final OffHeapTypeInfo offHeapTypeInfo = saveContext.offHeapTypeInfoMapForInline().get(targetType);
                 final MemorySegment arraySegment = memorySegment.asSlice(offset + dataOffset);
                 final long byteSize = offHeapTypeInfo.byteSize();
@@ -73,7 +73,7 @@ public class GlobArrayInlineHandleAccess implements HandleAccess {
 
     @Override
     public void readAtOffset(MutableGlob data, MemorySegment memorySegment, long offset, ReadContext readContext) {
-        int len = (int) lenHandle.get(memorySegment, offset);
+        int len = memorySegment.get(ValueLayout.JAVA_INT, offset + lenOffset);
         if (len == -2) {
             return;
         }

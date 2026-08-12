@@ -5,38 +5,29 @@ import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.metamodel.fields.StringField;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
-import org.globsframework.core.model.globaccessor.set.GlobSetAccessor;
 import org.globsframework.core.model.globaccessor.set.GlobSetStringAccessor;
 import org.globsframework.shared.mem.tree.impl.read.ReadContext;
 import org.globsframework.shared.mem.tree.impl.write.SaveContext;
 
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.lang.invoke.VarHandle;
 import java.nio.charset.StandardCharsets;
 
-public class FixSize7BitsStringFieldHandleAccess implements HandleAccess {
+public final class FixSize7BitsStringFieldHandleAccess implements HandleAccess {
     private final StringField stringField;
-    private final VarHandle varStrHandle;
     private final long strBaseOffset;
     private final int maxSize;
     private final boolean canTruncate;
-    private final FixSizeStringFieldHandleAccess.ReadLen lenAccess;
+    private final FixSizeStringFieldHandleAccess.RecordLen lenAccess;
     private final GlobSetStringAccessor setAccessor;
 
-    FixSize7BitsStringFieldHandleAccess(StringField stringField, VarHandle varLenHandle, VarHandle varStrHandle,
-                                        long strBaseOffset) {
+    FixSize7BitsStringFieldHandleAccess(StringField stringField, long lenOffset, long strBaseOffset) {
         this.stringField = stringField;
-        this.varStrHandle = varStrHandle;
         this.strBaseOffset = strBaseOffset;
         final Glob maxSize = stringField.getAnnotation(MaxSize.KEY);
         this.maxSize = maxSize.getNotNull(MaxSize.VALUE);
         canTruncate = maxSize.isTrue(MaxSize.ALLOW_TRUNCATE);
-        if (this.maxSize < FixSizeStringFieldHandleAccess.ByteLenAccess.MAX_LEN) {
-            lenAccess = new FixSizeStringFieldHandleAccess.ByteLenAccess(varLenHandle);
-        } else {
-            lenAccess = new FixSizeStringFieldHandleAccess.IntLenAccess(varLenHandle);
-        }
+        this.lenAccess = FixSizeStringFieldHandleAccess.createLenAccess(this.maxSize, lenOffset);
         setAccessor = stringField.getGlobType().getSetAccessor(stringField);
     }
 
@@ -58,8 +49,9 @@ public class FixSize7BitsStringFieldHandleAccess implements HandleAccess {
             }
             int len = Math.min(str.length(), this.maxSize);
             lenAccess.writeLen(memorySegment, offset, len);
+            final long base = offset + strBaseOffset;
             for (int j = 0; j < len; j++) {
-                varStrHandle.set(memorySegment, offset, j, (byte) (str.codePointAt(j) & 0xFF));
+                memorySegment.set(ValueLayout.JAVA_BYTE, base + j, (byte) (str.codePointAt(j) & 0xFF));
             }
         }
     }

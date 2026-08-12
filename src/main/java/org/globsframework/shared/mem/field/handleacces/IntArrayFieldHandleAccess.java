@@ -16,35 +16,29 @@ import java.lang.foreign.GroupLayout;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.lang.invoke.VarHandle;
 
-public class IntArrayFieldHandleAccess implements HandleAccess {
+public final class IntArrayFieldHandleAccess implements HandleAccess {
     private final IntegerArrayField field;
-    private final VarHandle lenHandle;
-    private final VarHandle arrayHandle;
+    private final long lenOffset;
     private final long arrayBaseOffset;
     private final Integer size;
     private final GlobSetIntArrayAccessor setAccessor;
 
-    public IntArrayFieldHandleAccess(VarHandle lenHandle, VarHandle arrayHandle, long arrayBaseOffset,
+    public IntArrayFieldHandleAccess(long lenOffset, long arrayBaseOffset,
                                      int size, IntegerArrayField field) {
         this.size = size;
         this.field = field;
-        this.lenHandle = lenHandle;
-        this.arrayHandle = arrayHandle;
+        this.lenOffset = lenOffset;
         this.arrayBaseOffset = arrayBaseOffset;
         setAccessor = field.getGlobType().getSetAccessor(field);
     }
 
     public static HandleAccess create(GroupLayout groupLayout, IntegerArrayField field) {
         int size = field.getAnnotation(ArraySize.KEY).getNotNull(ArraySize.VALUE);
-        final VarHandle lenHandle = groupLayout.varHandle(MemoryLayout.PathElement.groupElement(field.getName() + DefaultOffHeapTreeService.STRING_SUFFIX_LEN));
-        final VarHandle arrayHandle = groupLayout.varHandle(
-                MemoryLayout.PathElement.groupElement(field.getName()),
-                MemoryLayout.PathElement.sequenceElement());
+        final long lenOffset = groupLayout.byteOffset(MemoryLayout.PathElement.groupElement(field.getName() + DefaultOffHeapTreeService.STRING_SUFFIX_LEN));
         // the byte offset of the sequence inside the record : what a bulk copy needs
         final long arrayBaseOffset = groupLayout.byteOffset(MemoryLayout.PathElement.groupElement(field.getName()));
-        return new IntArrayFieldHandleAccess(lenHandle, arrayHandle, arrayBaseOffset, size, field);
+        return new IntArrayFieldHandleAccess(lenOffset, arrayBaseOffset, size, field);
     }
 
     @Override
@@ -59,19 +53,17 @@ public class IntArrayFieldHandleAccess implements HandleAccess {
             throw new InvalidParameter("Array size " + value.length + " is too large. Max is " + size);
         }
         if (value == null) {
-            lenHandle.set(memorySegment, offset, data.isSet(field) ? -1 : -2);
+            memorySegment.set(ValueLayout.JAVA_INT, offset + lenOffset, data.isSet(field) ? -1 : -2);
         }
         else {
-            lenHandle.set(memorySegment, offset, value.length);
-            for (int j = 0; j < value.length; j++) {
-                arrayHandle.set(memorySegment, offset, j, value[j]);
-            }
+            memorySegment.set(ValueLayout.JAVA_INT, offset + lenOffset, value.length);
+            MemorySegment.copy(value, 0, memorySegment, ValueLayout.JAVA_INT, offset + arrayBaseOffset, value.length);
         }
     }
 
     @Override
     public void readAtOffset(MutableGlob data, MemorySegment memorySegment, long offset, ReadContext readContext) {
-        final int size = (int) lenHandle.get(memorySegment, offset);
+        final int size = memorySegment.get(ValueLayout.JAVA_INT, offset + lenOffset);
         if (size == -1) {
             setAccessor.set(data, null);
 

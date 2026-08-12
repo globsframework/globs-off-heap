@@ -12,21 +12,21 @@ import org.globsframework.shared.mem.tree.impl.write.SaveContext;
 import java.lang.foreign.GroupLayout;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
-import java.lang.invoke.VarHandle;
+import java.lang.foreign.ValueLayout;
 
-public class BooleanFieldHandleAccess implements HandleAccess {
-    private final VarHandle varHandle;
+public final class BooleanFieldHandleAccess implements HandleAccess {
+    private final long fieldOffset;
     private final BooleanField field;
     private final GlobSetBooleanAccessor setAccessor;
 
-    public BooleanFieldHandleAccess(VarHandle varHandle, BooleanField field) {
-        this.varHandle = varHandle;
+    public BooleanFieldHandleAccess(long fieldOffset, BooleanField field) {
+        this.fieldOffset = fieldOffset;
         this.field = field;
         setAccessor = field.getGlobType().getSetAccessor(field);
     }
 
     public static HandleAccess create(GroupLayout groupLayout, BooleanField field) {
-        return new BooleanFieldHandleAccess(groupLayout.varHandle(MemoryLayout.PathElement.groupElement(field.getName())), field);
+        return new BooleanFieldHandleAccess(groupLayout.byteOffset(MemoryLayout.PathElement.groupElement(field.getName())), field);
     }
 
     @Override
@@ -37,11 +37,11 @@ public class BooleanFieldHandleAccess implements HandleAccess {
     @Override
     public void save(Glob data, MemorySegment memorySegment, long offset, SaveContext saveContext) {
         final boolean value = data.get(field, false);
-        varHandle.set(memorySegment, offset, value);
+        memorySegment.set(ValueLayout.JAVA_BOOLEAN, offset + fieldOffset, value);
     }
 
     @Override
     public void readAtOffset(MutableGlob data, MemorySegment memorySegment, long offset, ReadContext readContext) {
-        setAccessor.set(data, (boolean)varHandle.get(memorySegment, offset));
+        setAccessor.set(data, memorySegment.get(ValueLayout.JAVA_BOOLEAN, offset + fieldOffset));
     }
 }

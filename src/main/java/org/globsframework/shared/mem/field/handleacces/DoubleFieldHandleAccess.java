@@ -12,21 +12,21 @@ import org.globsframework.shared.mem.tree.impl.write.SaveContext;
 import java.lang.foreign.GroupLayout;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
-import java.lang.invoke.VarHandle;
+import java.lang.foreign.ValueLayout;
 
-public class DoubleFieldHandleAccess implements HandleAccess {
-    private final VarHandle varHandle;
+public final class DoubleFieldHandleAccess implements HandleAccess {
+    private final long fieldOffset;
     private final DoubleField field;
     private final GlobSetDoubleAccessor setAccessor;
 
-    public DoubleFieldHandleAccess(VarHandle varHandle, DoubleField field) {
-        this.varHandle = varHandle;
+    public DoubleFieldHandleAccess(long fieldOffset, DoubleField field) {
+        this.fieldOffset = fieldOffset;
         this.field = field;
         setAccessor = field.getGlobType().getSetAccessor(field);
     }
 
     public static HandleAccess create(GroupLayout groupLayout, DoubleField field) {
-        return new DoubleFieldHandleAccess(groupLayout.varHandle(MemoryLayout.PathElement.groupElement(field.getName())), field);
+        return new DoubleFieldHandleAccess(groupLayout.byteOffset(MemoryLayout.PathElement.groupElement(field.getName())), field);
     }
 
     @Override
@@ -37,11 +37,11 @@ public class DoubleFieldHandleAccess implements HandleAccess {
     @Override
     public void save(Glob data, MemorySegment memorySegment, long offset, SaveContext saveContext) {
         final double value = data.get(field, 0);
-        varHandle.set(memorySegment, offset, value);
+        memorySegment.set(ValueLayout.JAVA_DOUBLE, offset + fieldOffset, value);
     }
 
     @Override
     public void readAtOffset(MutableGlob data, MemorySegment memorySegment, long offset, ReadContext readContext) {
-        setAccessor.set(data, (double) varHandle.get(memorySegment, offset));
+        setAccessor.set(data, memorySegment.get(ValueLayout.JAVA_DOUBLE, offset + fieldOffset));
     }
 }

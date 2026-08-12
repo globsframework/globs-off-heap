@@ -12,21 +12,21 @@ import org.globsframework.shared.mem.tree.impl.write.SaveContext;
 import java.lang.foreign.GroupLayout;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
-import java.lang.invoke.VarHandle;
+import java.lang.foreign.ValueLayout;
 
-public class IntegerFieldHandleAccess implements HandleAccess {
-    private final VarHandle varHandle;
+public final class IntegerFieldHandleAccess implements HandleAccess {
+    private final long fieldOffset;
     private final IntegerField field;
     private final GlobSetIntAccessor setAccessor;
 
-    public IntegerFieldHandleAccess(VarHandle varHandle, IntegerField field) {
-        this.varHandle = varHandle;
+    public IntegerFieldHandleAccess(long fieldOffset, IntegerField field) {
+        this.fieldOffset = fieldOffset;
         this.field = field;
         setAccessor = field.getGlobType().getSetAccessor(field);
     }
 
     public static HandleAccess create(GroupLayout groupLayout, IntegerField field) {
-        return new IntegerFieldHandleAccess(groupLayout.varHandle(MemoryLayout.PathElement.groupElement(field.getName())), field);
+        return new IntegerFieldHandleAccess(groupLayout.byteOffset(MemoryLayout.PathElement.groupElement(field.getName())), field);
     }
 
     @Override
@@ -37,12 +37,12 @@ public class IntegerFieldHandleAccess implements HandleAccess {
     @Override
     public void save(Glob data, MemorySegment memorySegment, long offset, SaveContext saveContext) {
         final int value = data.get(field, 0);
-        varHandle.set(memorySegment, offset, value);
+        memorySegment.set(ValueLayout.JAVA_INT, offset + fieldOffset, value);
     }
 
     @Override
     public void readAtOffset(MutableGlob data, MemorySegment memorySegment, long offset, ReadContext readContext) {
-        setAccessor.set(data, (int)varHandle.get(memorySegment, offset));
+        setAccessor.set(data, memorySegment.get(ValueLayout.JAVA_INT, offset + fieldOffset));
     }
 
 }

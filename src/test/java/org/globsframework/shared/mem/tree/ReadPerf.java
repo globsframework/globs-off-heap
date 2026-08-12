@@ -16,7 +16,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.globsframework.shared.mem.tree.TestShared.MODULO;
-import static org.globsframework.shared.mem.tree.TestShared.createData;
 
 /*
 FindPerf measures the index descent only -- find() stops at an offset. This one measures what an application
@@ -26,6 +25,10 @@ does with that offset : materializing the Glob, which is where the per-field wor
   read        : one Glob out of a known offset -- the HandleAccess[] loop
   findAndRead : what a cache lookup actually costs end to end
   readAll     : the same loop amortized over every record, no index
+
+Every benchmark round-robins over FAMILY_COUNT *different* GlobTypes (see PerfTypeFamily) so the call sites
+see what a process holding a few stores sees, and runs twice over the `shape` param : a 15-field record and a
+45-field one. Numbers from the single-type version of this class are not comparable with these.
 
 Run :
   mvn -o test-compile dependency:build-classpath -Dmdep.outputFile=/tmp/cp.txt
@@ -38,78 +41,106 @@ Run :
 @State(Scope.Thread)
 public class ReadPerf {
     private static final int COUNT = 10_000;
+    private static final int KEY_COUNT = 1000;
+    private static final int FAMILY_COUNT = 4;
 
-    private ReadOffHeapUniqueIndex readOffHeapIndex;
-    private OffHeapReadTreeService readHeapService;
-    private FunctionalKey[] functionalKeys;
-    private OffHeapRef[] refs;
+    @Param({"narrow", "wide"})
+    public PerfTypeFamily.Shape shape;
+
+    private OffHeapReadTreeService[] readHeapServices;
+    private ReadOffHeapUniqueIndex[] readOffHeapIndexes;
+    private FunctionalKey[][] functionalKeys;
+    private OffHeapRef[][] refs;
     private int cursor;
+    private int family;
 
     @Setup
     public void setUp() throws IOException {
-        List<Glob> globs = new ArrayList<>();
-        for (int i = 0; i < COUNT; i++) {
-            final LocalDate localDate = LocalDate.of(1900 + (i % 200), i % 11 + 1, i % 28 + 1);
-            globs.add(createData(i, localDate));
-        }
+        final PerfTypeFamily[] families = PerfTypeFamily.create(shape, FAMILY_COUNT);
+        readHeapServices = new OffHeapReadTreeService[FAMILY_COUNT];
+        readOffHeapIndexes = new ReadOffHeapUniqueIndex[FAMILY_COUNT];
+        functionalKeys = new FunctionalKey[FAMILY_COUNT][];
+        refs = new OffHeapRef[FAMILY_COUNT][];
 
-        final FunctionalKeyBuilder uniqueFunctionalKeyBuilder =
-                FunctionalKeyBuilderFactory.create(TestShared.DummyObject1.TYPE)
-                        .add(TestShared.DummyObject1.val1)
-                        .add(TestShared.DummyObject1.val2)
+        final Arena arena = Arena.ofShared();
+        for (int f = 0; f < FAMILY_COUNT; f++) {
+            final PerfTypeFamily perfType = families[f];
+            List<Glob> globs = new ArrayList<>();
+            for (int i = 0; i < COUNT; i++) {
+                final LocalDate localDate = LocalDate.of(1900 + (i % 200), i % 11 + 1, i % 28 + 1);
+                globs.add(perfType.createData(i, localDate));
+            }
+
+            final FunctionalKeyBuilder uniqueFunctionalKeyBuilder =
+                    FunctionalKeyBuilderFactory.create(perfType.type)
+                            .add(perfType.key1)
+                            .add(perfType.key2)
+                            .create();
+
+            OffHeapTreeService offHeapService = OffHeapTreeService.create(perfType.type);
+            OffHeapUniqueIndex offHeapUniqueIndex = offHeapService.declareUniqueIndex("uniqueIndex", uniqueFunctionalKeyBuilder);
+
+            final Path path = Files.createTempDirectory("readperf");
+            offHeapService.createWrite(path).save(globs);
+
+            functionalKeys[f] = new FunctionalKey[KEY_COUNT];
+            for (int i = 0; i < KEY_COUNT; i++) {
+                functionalKeys[f][i] = uniqueFunctionalKeyBuilder.create()
+                        .set(perfType.key1, i)
+                        .set(perfType.key2, (i % MODULO))
                         .create();
+            }
 
-        OffHeapTreeService offHeapService = OffHeapTreeService.create(TestShared.DummyObject1.TYPE);
-        OffHeapUniqueIndex offHeapUniqueIndex = offHeapService.declareUniqueIndex("uniqueIndex", uniqueFunctionalKeyBuilder);
+            readHeapServices[f] = offHeapService.createRead(path, arena);
+            readOffHeapIndexes[f] = readHeapServices[f].getIndex(offHeapUniqueIndex);
 
-        final Path path = Files.createTempDirectory("readperf");
-        offHeapService.createWrite(path).save(globs);
-
-        functionalKeys = new FunctionalKey[1000];
-        for (int i = 0; i < functionalKeys.length; i++) {
-            functionalKeys[i] = uniqueFunctionalKeyBuilder.create()
-                    .set(TestShared.DummyObject1.val1, i)
-                    .set(TestShared.DummyObject1.val2, (i % MODULO))
-                    .create();
-        }
-
-        readHeapService = offHeapService.createRead(path, Arena.ofShared());
-        readOffHeapIndex = readHeapService.getIndex(offHeapUniqueIndex);
-
-        // the refs the index would hand back, resolved once so read() can be measured on its own
-        refs = new OffHeapRef[functionalKeys.length];
-        for (int i = 0; i < functionalKeys.length; i++) {
-            refs[i] = readOffHeapIndex.find(functionalKeys[i]);
+            // the refs the index would hand back, resolved once so read() can be measured on its own
+            refs[f] = new OffHeapRef[KEY_COUNT];
+            for (int i = 0; i < KEY_COUNT; i++) {
+                refs[f][i] = readOffHeapIndexes[f].find(functionalKeys[f][i]);
+            }
         }
     }
 
     /** a different key every call : one index descent is not one cached branch */
     private int next() {
         int i = cursor++;
-        if (cursor == functionalKeys.length) {
+        if (cursor == KEY_COUNT) {
             cursor = 0;
         }
         return i;
     }
 
+    /** a different type every call : the read call sites are shared between the stores of a process */
+    private int nextFamily() {
+        int f = family++;
+        if (family == FAMILY_COUNT) {
+            family = 0;
+        }
+        return f;
+    }
+
     @Benchmark
     public OffHeapRef find() {
-        return readOffHeapIndex.find(functionalKeys[next()]);
+        final int f = nextFamily();
+        return readOffHeapIndexes[f].find(functionalKeys[f][next()]);
     }
 
     @Benchmark
     public Glob read() {
-        return readHeapService.read(refs[next()]);
+        final int f = nextFamily();
+        return readHeapServices[f].read(refs[f][next()]);
     }
 
     @Benchmark
     public Glob findAndRead() {
-        return readHeapService.read(readOffHeapIndex.find(functionalKeys[next()]));
+        final int f = nextFamily();
+        return readHeapServices[f].read(readOffHeapIndexes[f].find(functionalKeys[f][next()]));
     }
 
     @Benchmark
     public void readAll(Blackhole blackhole) throws IOException {
-        readHeapService.readAll(glob -> {
+        readHeapServices[nextFamily()].readAll(glob -> {
             blackhole.consume(glob);
             return true;
         });

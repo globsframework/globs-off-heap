@@ -5,7 +5,6 @@ import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.metamodel.fields.StringField;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
-import org.globsframework.core.model.globaccessor.set.GlobSetAccessor;
 import org.globsframework.core.model.globaccessor.set.GlobSetStringAccessor;
 import org.globsframework.shared.mem.model.Heap7BitsString;
 import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
@@ -18,51 +17,58 @@ import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
 import java.lang.invoke.VarHandle;
 
-public class FixSizeStringFieldHandleAccess implements HandleAccess {
+public final class FixSizeStringFieldHandleAccess implements HandleAccess {
     private final StringField stringField;
-    private final VarHandle varStrHandle;
     private final long strBaseOffset;
     private final int maxSize;
     private final boolean canTruncate;
-    private final ReadLen lenAccess;
+    private final RecordLen lenAccess;
     private final GlobSetStringAccessor setAccessor;
 
-    FixSizeStringFieldHandleAccess(StringField stringField, VarHandle varLenHandle, VarHandle varStrHandle,
-                                   long strBaseOffset) {
+    FixSizeStringFieldHandleAccess(StringField stringField, long lenOffset, long strBaseOffset) {
         this.stringField = stringField;
-        this.varStrHandle = varStrHandle;
         this.strBaseOffset = strBaseOffset;
         final Glob maxSize = stringField.getAnnotation(MaxSize.KEY);
         this.maxSize = maxSize.getNotNull(MaxSize.VALUE);
         canTruncate = maxSize.isTrue(MaxSize.ALLOW_TRUNCATE);
-        if (this.maxSize < ByteLenAccess.MAX_LEN) {
-            lenAccess = new ByteLenAccess(varLenHandle);
-        }
-        else {
-            lenAccess = new IntLenAccess(varLenHandle);
-        }
+        this.lenAccess = createLenAccess(this.maxSize, lenOffset);
         setAccessor = stringField.getGlobType().getSetAccessor(stringField);
     }
 
+    /**
+     * The length slot of a record, addressed by byte offset. The index side has its own reader
+     * ({@link ReadLen}) because it addresses a record inside a sequence through an indexed VarHandle ; here
+     * the offset is known at create() time, so the layout constant is enough and nothing goes through a
+     * VarHandle whose receiver the JIT cannot fold.
+     */
+    public interface RecordLen {
+        int readLen(MemorySegment memorySegment, long offset);
 
+        void writeLen(MemorySegment memorySegment, long offset, int len);
+    }
+
+    static RecordLen createLenAccess(int maxSize, long lenOffset) {
+        return maxSize < ByteLenAccess.MAX_LEN ? new ByteRecordLen(lenOffset) : new IntRecordLen(lenOffset);
+    }
+
+    /** the same slot, reached from the index records, where the offset is not known ahead of the descent */
     public interface ReadLen {
         int readLen(MemorySegment memorySegment, long index);
+
         int readLenArray(MemorySegment memorySegment, long index);
+
         void writeLen(MemorySegment memorySegment, long index, int len);
     }
 
     public static HandleAccess create(GroupLayout groupLayout, StringField stringField) {
-        final VarHandle lenHandle = groupLayout.varHandle(MemoryLayout.PathElement.groupElement(stringField.getName() + DefaultOffHeapTreeService.STRING_SUFFIX_LEN));
-        final VarHandle strHandle =
-                groupLayout.varHandle(MemoryLayout.PathElement.groupElement(stringField.getName()),
-                        MemoryLayout.PathElement.sequenceElement());
+        final long lenOffset = groupLayout.byteOffset(MemoryLayout.PathElement.groupElement(stringField.getName() + DefaultOffHeapTreeService.STRING_SUFFIX_LEN));
         // the byte offset of the character sequence inside the record : what a bulk copy needs, where the
         // indexed VarHandle only gave one element at a time
         final long strBaseOffset = groupLayout.byteOffset(MemoryLayout.PathElement.groupElement(stringField.getName()));
         if (stringField.hasAnnotation(Heap7BitsString.UNIQUE_KEY)) {
-            return new FixSize7BitsStringFieldHandleAccess(stringField, lenHandle, strHandle, strBaseOffset);
+            return new FixSize7BitsStringFieldHandleAccess(stringField, lenOffset, strBaseOffset);
         } else {
-            return new FixSizeStringFieldHandleAccess(stringField, lenHandle, strHandle, strBaseOffset);
+            return new FixSizeStringFieldHandleAccess(stringField, lenOffset, strBaseOffset);
         }
     }
 
@@ -85,8 +91,9 @@ public class FixSizeStringFieldHandleAccess implements HandleAccess {
             }
             int len = Math.min(str.length(), this.maxSize);
             lenAccess.writeLen(memorySegment, offset, len);
+            final long base = offset + strBaseOffset;
             for (int j = 0; j < len; j++) {
-                varStrHandle.set(memorySegment, offset, j, str.charAt(j));
+                memorySegment.set(ValueLayout.JAVA_CHAR, base + j * 2L, str.charAt(j));
             }
         }
     }
@@ -106,6 +113,42 @@ public class FixSizeStringFieldHandleAccess implements HandleAccess {
             final char[] chars = new char[len];
             MemorySegment.copy(memorySegment, ValueLayout.JAVA_CHAR, offset + strBaseOffset, chars, 0, len);
             setAccessor.set(data, new String(chars, 0, len));
+        }
+    }
+
+    static final class ByteRecordLen implements RecordLen {
+        private final long lenOffset;
+
+        ByteRecordLen(long lenOffset) {
+            this.lenOffset = lenOffset;
+        }
+
+        @Override
+        public int readLen(MemorySegment memorySegment, long offset) {
+            return (memorySegment.get(ValueLayout.JAVA_BYTE, offset + lenOffset) & 0xFF) - 1;
+        }
+
+        @Override
+        public void writeLen(MemorySegment memorySegment, long offset, int len) {
+            memorySegment.set(ValueLayout.JAVA_BYTE, offset + lenOffset, (byte) (len + 1));
+        }
+    }
+
+    static final class IntRecordLen implements RecordLen {
+        private final long lenOffset;
+
+        IntRecordLen(long lenOffset) {
+            this.lenOffset = lenOffset;
+        }
+
+        @Override
+        public int readLen(MemorySegment memorySegment, long offset) {
+            return memorySegment.get(ValueLayout.JAVA_INT, offset + lenOffset);
+        }
+
+        @Override
+        public void writeLen(MemorySegment memorySegment, long offset, int len) {
+            memorySegment.set(ValueLayout.JAVA_INT, offset + lenOffset, len);
         }
     }
 

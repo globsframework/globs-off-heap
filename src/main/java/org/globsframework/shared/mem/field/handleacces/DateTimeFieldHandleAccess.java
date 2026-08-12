@@ -14,17 +14,15 @@ import java.lang.foreign.GroupLayout;
 import java.lang.foreign.MemoryLayout;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.lang.invoke.VarHandle;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 
-public class DateTimeFieldHandleAccess implements HandleAccess {
-    private final VarHandle dateVarHandle;
-    private final VarHandle timeVarHandle;
-    private final VarHandle nanoVarHandle;
-    private final VarHandle zoneIdVarHandle;
+public final class DateTimeFieldHandleAccess implements HandleAccess {
+    private final long dateOffset;
+    private final long timeOffset;
+    private final long nanoOffset;
     private final long zoneIdBaseOffset;
     private final DateTimeField field;
     private final GlobSetDateTimeAccessor setAccessor;
@@ -43,13 +41,12 @@ public class DateTimeFieldHandleAccess implements HandleAccess {
         }
     }
 
-    public DateTimeFieldHandleAccess(VarHandle dateVarHandle, VarHandle timeVarHandle,
-                                     VarHandle nanoVarHandle, VarHandle zoneIdVarHandle, long zoneIdBaseOffset,
+    public DateTimeFieldHandleAccess(long dateOffset, long timeOffset,
+                                     long nanoOffset, long zoneIdBaseOffset,
                                      DateTimeField field) {
-        this.dateVarHandle = dateVarHandle;
-        this.timeVarHandle = timeVarHandle;
-        this.nanoVarHandle = nanoVarHandle;
-        this.zoneIdVarHandle = zoneIdVarHandle;
+        this.dateOffset = dateOffset;
+        this.timeOffset = timeOffset;
+        this.nanoOffset = nanoOffset;
         this.zoneIdBaseOffset = zoneIdBaseOffset;
         this.field = field;
         setAccessor = field.getGlobType().getSetAccessor(field);
@@ -57,12 +54,9 @@ public class DateTimeFieldHandleAccess implements HandleAccess {
 
     public static HandleAccess create(GroupLayout groupLayout, DateTimeField field) {
         return new DateTimeFieldHandleAccess(
-                groupLayout.varHandle(MemoryLayout.PathElement.groupElement(field.getName() + DefaultOffHeapTreeService.DATE_TIME_DATE_SUFFIX)),
-                groupLayout.varHandle(MemoryLayout.PathElement.groupElement(field.getName() + DefaultOffHeapTreeService.DATE_TIME_TIME_SUFFIX)),
-                groupLayout.varHandle(MemoryLayout.PathElement.groupElement(field.getName() + DefaultOffHeapTreeService.DATE_TIME_NANO_SUFFIX)),
-                groupLayout.varHandle(
-                        MemoryLayout.PathElement.groupElement(field.getName() + DefaultOffHeapTreeService.DATE_TIME_ZONE_ID_SUFFIX),
-                        MemoryLayout.PathElement.sequenceElement()),
+                groupLayout.byteOffset(MemoryLayout.PathElement.groupElement(field.getName() + DefaultOffHeapTreeService.DATE_TIME_DATE_SUFFIX)),
+                groupLayout.byteOffset(MemoryLayout.PathElement.groupElement(field.getName() + DefaultOffHeapTreeService.DATE_TIME_TIME_SUFFIX)),
+                groupLayout.byteOffset(MemoryLayout.PathElement.groupElement(field.getName() + DefaultOffHeapTreeService.DATE_TIME_NANO_SUFFIX)),
                 groupLayout.byteOffset(MemoryLayout.PathElement.groupElement(
                         field.getName() + DefaultOffHeapTreeService.DATE_TIME_ZONE_ID_SUFFIX)),
                 field);
@@ -77,7 +71,7 @@ public class DateTimeFieldHandleAccess implements HandleAccess {
     public void save(Glob data, MemorySegment memorySegment, long offset, SaveContext saveContext) {
         final ZonedDateTime value = data.get(field);
         if (value == null) {
-            dateVarHandle.set(memorySegment, offset, Integer.MIN_VALUE);
+            memorySegment.set(ValueLayout.JAVA_INT, offset + dateOffset, Integer.MIN_VALUE);
             return;
         }
         int val1 = (value.getYear() & 0xFFFFF) << 9 | value.getMonthValue() << 5 | value.getDayOfMonth();
@@ -85,29 +79,30 @@ public class DateTimeFieldHandleAccess implements HandleAccess {
         int nano = value.getNano();
         String zone = value.getZone().getId();
 
-        dateVarHandle.set(memorySegment, offset, val1);
-        timeVarHandle.set(memorySegment, offset, val2);
-        nanoVarHandle.set(memorySegment, offset, nano);
+        memorySegment.set(ValueLayout.JAVA_INT, offset + dateOffset, val1);
+        memorySegment.set(ValueLayout.JAVA_INT, offset + timeOffset, val2);
+        memorySegment.set(ValueLayout.JAVA_INT, offset + nanoOffset, nano);
         if (zone.length() > DefaultOffHeapTreeService.DATE_TIME_MAX_ZONE_ID_SIZE) {
             throw new RuntimeException("Zone can not have more than " + DefaultOffHeapTreeService.DATE_TIME_MAX_ZONE_ID_SIZE + " characters");
         }
+        final long zoneBase = offset + zoneIdBaseOffset;
         for (int i = 0; i < zone.length(); i++) {
-            zoneIdVarHandle.set(memorySegment, offset, i, (byte)zone.charAt(i));
+            memorySegment.set(ValueLayout.JAVA_BYTE, zoneBase + i, (byte) zone.charAt(i));
         }
         for (int i = zone.length(); i < DefaultOffHeapTreeService.DATE_TIME_MAX_ZONE_ID_SIZE; i++) {
-            zoneIdVarHandle.set(memorySegment, offset, i, (byte)' ');
+            memorySegment.set(ValueLayout.JAVA_BYTE, zoneBase + i, (byte) ' ');
         }
     }
 
     @Override
     public void readAtOffset(MutableGlob data, MemorySegment memorySegment, long offset, ReadContext readContext) {
-        int val1 = (int)dateVarHandle.get(memorySegment, offset);
+        int val1 = memorySegment.get(ValueLayout.JAVA_INT, offset + dateOffset);
         if (val1 == Integer.MIN_VALUE) {
             data.set(field, null);
             return;
         }
-        int val2 = (int)timeVarHandle.get(memorySegment, offset);
-        int nano =  (int)nanoVarHandle.get(memorySegment, offset);
+        int val2 = memorySegment.get(ValueLayout.JAVA_INT, offset + timeOffset);
+        int nano = memorySegment.get(ValueLayout.JAVA_INT, offset + nanoOffset);
         // one bulk copy rather than up to 52 VarHandle calls, then the space padding tells the real length
         byte[] array = new byte[DefaultOffHeapTreeService.DATE_TIME_MAX_ZONE_ID_SIZE];
         MemorySegment.copy(memorySegment, ValueLayout.JAVA_BYTE, offset + zoneIdBaseOffset, array, 0,
