@@ -123,11 +123,11 @@ Still on the table, in rough order of what a profile says:
   by partitioning the array by field kind so each loop walks a `final` concrete class and is monomorphic. The
   classes are already `final` for that.
 - a fully unrolled per-type reader is the analogue of what globs-grpc and globs-bin-serialisation do with
-  core's `GenerateCaller` — but that SPI is **write-direction only** (`call(Glob data, ctx1, ctx2)` pulls
+  core's `ToGlobCaller` — but that SPI is **write-direction only** (`call(Glob data, ctx1, ctx2)` pulls
   values *out* of a Glob), so it maps onto `save`, not onto `readAtOffset`. Reading needs either a
   `MethodHandle` chain built at startup (no new dependency, but a wide type can blow the inlining budget) or
   a new setter-side SPI in core. Note also that `globs` is pinned at 5.10.0 here, which predates
-  `model/generate/read`.
+  `model/caller`.
 - `readStrings` is a `Map<Integer, String>`, so every interned-string read boxes its address (`IntHashMap` is
   already imported there, unused).
 - every scalar field is boxed on its way into `DefaultGlob`'s `Object[]` — `GlobSetIntAccessor.set` takes an
