@@ -7,9 +7,7 @@ import org.globsframework.core.metamodel.GlobType;
 import org.globsframework.core.metamodel.GlobTypeBuilder;
 import org.globsframework.core.metamodel.GlobTypeBuilderFactory;
 import org.globsframework.core.metamodel.annotations.ArraySize;
-import org.globsframework.core.metamodel.annotations.ArraySize_;
 import org.globsframework.core.metamodel.annotations.MaxSize;
-import org.globsframework.core.metamodel.annotations.MaxSize_;
 import org.globsframework.core.metamodel.fields.*;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.MutableGlob;
@@ -277,7 +275,6 @@ public class TestShared {
 
         public static final IntegerField maxValue;
 
-        @ArraySize_(3)
         public static final IntegerArrayField data;
 
         public static final LongField data1;
@@ -292,16 +289,12 @@ public class TestShared {
 
         public static final LongField data6;
 
-        @MaxSize_(value = 15)
         public static final StringField fix7BitsSizeStr;
 
-        @MaxSize_(value = 13, allow_truncate = true)
         public static final StringField fixSizeStrAllowTruncate;
 
-        @MaxSize_(value = 22, allow_truncate = false)
         public static final StringField fixSizeStrNoTruncate;
 
-        @MaxSize_(value = 200, allow_truncate = false)
         public static final StringField fixBigSizeStrNoTruncate;
 
         static {
