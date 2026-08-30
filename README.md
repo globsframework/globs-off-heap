@@ -16,7 +16,7 @@ goes through a pre-resolved `VarHandle` — no reflection, and nothing is copied
 ## Requirements
 
 - Java 22 or higher (the Foreign Memory API is used without preview flags)
-- `org.globsframework:globs` 5.6.0
+- `org.globsframework:globs` (5.13-SNAPSHOT on the current branch)
 
 ## Installation
 
@@ -24,7 +24,7 @@ goes through a pre-resolved `VarHandle` — no reflection, and nothing is copied
 <dependency>
     <groupId>org.globsframework</groupId>
     <artifactId>globs-off-heap</artifactId>
-    <version>5.7.0</version>
+    <version>5.9.0</version>
 </dependency>
 ```
 
