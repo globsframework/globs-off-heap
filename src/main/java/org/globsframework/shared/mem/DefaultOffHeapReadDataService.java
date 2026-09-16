@@ -148,7 +148,7 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
         final long groupSize = offHeapTypeInfo.primary().groupLayout.byteSize();
         final GlobType type = offHeapTypeInfo.primary().type;
         long offset = 0;
-        final GlobReader reader = offHeapTypeInfo.primary().reader;
+        final GlobReader reader = offHeapTypeInfo.primary().walkReader;
         while (true) {
             if (offset + groupSize > dataSize) {
                 return;

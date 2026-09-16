@@ -5,6 +5,7 @@ import org.globsframework.core.metamodel.annotations.MaxSize;
 import org.globsframework.core.metamodel.fields.*;
 import org.globsframework.shared.mem.field.handleacces.*;
 import org.globsframework.shared.mem.model.HeapInline;
+import org.globsframework.shared.mem.tree.impl.read.CallerGlobReader;
 import org.globsframework.shared.mem.tree.impl.read.GlobReader;
 import org.globsframework.shared.mem.tree.impl.read.PartitionedGlobReader;
 import org.slf4j.Logger;
@@ -19,6 +20,12 @@ public class OffHeapTypeInfo {
     public final HandleAccess[] handleAccesses;
     /** the read walk over {@link #handleAccesses} — every read of a whole record goes through it */
     public final GlobReader reader;
+    /**
+     * What a whole-file walk reads with : the generated caller when something is installed to generate one,
+     * else the same {@link #reader} every other read goes through. Shared like it, for the same reason —
+     * neither holds anything per record.
+     */
+    public final GlobReader walkReader;
     private final long sizeWithPadding;
     public final Field[] fields;
 
@@ -28,6 +35,8 @@ public class OffHeapTypeInfo {
         this.groupLayout = groupLayout;
         this.handleAccesses = handleAccesses;
         this.reader = PartitionedGlobReader.create(handleAccesses);
+        final GlobReader generated = CallerGlobReader.readerFor(type, handleAccesses);
+        this.walkReader = generated != null ? generated : this.reader;
         this.sizeWithPadding = sizeWithPadding;
     }
 

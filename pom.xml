@@ -161,6 +161,14 @@
             <scope>test</scope>
         </dependency>
         <dependency>
+            <!-- test only : it is what installs a generating ToGlobCallerFactory through
+                 -Dglobs.caller.toGlob, which main code only ever sees through core's SPI -->
+            <groupId>org.globsframework</groupId>
+            <artifactId>globs-generate</artifactId>
+            <version>5.5-SNAPSHOT</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
             <version>6.1.3</version>
