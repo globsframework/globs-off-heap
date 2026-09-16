@@ -136,12 +136,30 @@ object, no generic bridge, no checkcast, no boxed offset: one LLOAD for the offs
 | `readAll`, 5 forks × 5 iterations | partitioned | generated | |
 | --- | --- | --- | --- |
 | narrow, 15 fields | 415.3 ± 6.4 | **462.9 ± 6.8** | **+11.5 %** |
-| wide, 45 fields | **145.7 ± 1.6** | 130.4 ± 0.7 | **−10.5 %** |
+| wide, 45 fields | **142.4 ± 3.2** | 129.8 ± 1.4 | **−8.8 %** |
 
 `read` — one record, on the partitioned reader in both arms — is the control and does not move
 (4412 k / 4476 k narrow, 1781 k / 1773 k wide).
 
-**What the shape is worth**: the same walk through `ToGlobFunction`, i.e. with the adapter and the boxed
+**Which of the two wins is not predictable from the type**, and that is a measured statement, not a shrug.
+`ReadAllPerf`'s `shape` param carries twelve of them; the generated walk wins ten, from +2 % to +31 %, and
+loses two — `wide` and `wideSmallBig`. Five candidate rules were measured and each refuted:
+
+| candidate rule | what killed it |
+| --- | --- |
+| fields per kind (a loop amortizes one inlined body per kind) | `narrowFewKinds`, 5 fields per kind, wins **+31 %** — the biggest win of all |
+| field count (the unrolled method's size) | `wideFewKinds`, 45 fields, wins +10 % |
+| how much big-bodied accessor code the type holds | 45 fields of which 24 fixed-size strings wins **+20 %**; the sweep `mixed6…mixed36` wins at every point |
+| number of distinct kinds | `kinds15` — 45 fields, 15 kinds, like `wide` — wins **+11.9 %** in the same run where `wide` loses 8.8 % |
+| the width of the largest field | `wideSmallBig`, `wide` with its 200-char string cut to 40, loses **more** (−14.9 %) |
+
+`wide` and `kinds15` have the same field count, the same fifteen kinds and the same ten accessor classes, and
+differ by three fields (9 int / 3 double against 6 / 6). They land twenty points apart. This is a JIT
+outcome, not a property of the type — so the library does not guess: the generated walk is the default, and
+`HeapLoopRead` on a GlobType is how one that measured otherwise keeps the loops. Put it on a type only with a
+`readAll` benchmark behind it.
+
+**What the shape is worth****What the shape is worth**: the same walk through `ToGlobFunction`, i.e. with the adapter and the boxed
 offset, measured 405.2 narrow and 114.1 wide. Dropping the adaptation is **+14 %** on both, and it is what
 turns narrow from noise into a win. The counters say why, and they say it cleanly — the generated arm now
 runs **fewer instructions than the partitioned one** (103.7 M against 106.9 M per pass; through
@@ -153,12 +171,6 @@ inlining budget (the chunk below) and not the size of 45 inlined bodies.
 for slightly less work, with branch misses up 59 % (worth about a seventh of the gap). A long straight line
 decodes worse than a short hot loop — µop cache residency, which no icache counter shows — and that is not
 something the API can fix.
-
-**So whether unrolling wins depends on the type, and predictably so.** A loop per kind amortizes *one*
-inlined body over every field of that kind; unrolling needs one per field. Narrow is 15 fields over ~14
-kinds, so each loop runs once and its overhead dominates: unrolling wins by 11.5 %. Wide is three fields per
-kind, the loop amortizes, and unrolling loses by 10.5 %. Fields per kind is the number to look at before
-adopting this for a type — it is not a global answer.
 
 **The chunk does not rescue the wide shape** (`-Dglobs.caller.toGlob.chunk=<n>`, added to globs-generate for
 this, and which the typed shape does not implement — it always emits one method). Measured on the earlier
@@ -191,10 +203,10 @@ Still on the table, in rough order of what a profile says:
 - splitting the `HandleAccess[]` walk per field kind is **done** — `PartitionedGlobReader`, one monomorphic
   loop per kind instead of one megamorphic call site for the ~14 implementations. What is left of that cost
   is the missed inlining, and "The generated walk" above says what removing it is worth.
-- picking the walk per type rather than per process: the generated one wins on a type whose fields are spread
-  over many kinds and loses on one with several fields per kind (+11.5 % / −10.5 % here). `OffHeapTypeInfo`
-  has both readers at hand and knows the field kinds, so the choice is a ratio away — what is missing is
-  shapes between 15 and 45 fields to put the threshold somewhere honest.
+- what makes `wide` the one shape the generated walk loses on. Five structural rules were refuted (see "The
+  generated walk"), and what is left to look at is the compiled code itself — the gap is pure IPC over an
+  identical instruction stream, so it is a decode or scheduling effect, and `-prof perfasm` on the two 45-field
+  shapes that disagree (`wide` and `kinds15`) is where it would show.
 - `readStrings` is a `Map<Integer, String>`, so every interned-string read boxes its address (`IntHashMap` is
   already imported there, unused).
 - every scalar field is boxed on its way into `DefaultGlob`'s `Object[]` — `GlobSetIntAccessor.set` takes an
@@ -216,6 +228,7 @@ Still on the table, in rough order of what a profile says:
 - **Annotations that drive layout** live in `mem/model` and follow the workspace's Glob-annotation pattern
   (`TYPE`/`UNIQUE_KEY`/`UNIQUE_GLOB`): `HeapInline` (embed instead of reference), `HeapMaxElement`
   (**required** on every `GlobArrayField` — its `maxSize` fixes the array stride), `Heap7BitsString`.
+  `HeapLoopRead` is in the same place but drives nothing in the layout — it only picks the reader of a walk.
   Core `@MaxSize` and `@ArraySize` are also read.
 - Files in a storage directory: `content.data_<TypeName>` (one per type, plus a `_<indexName>` suffix for
   hash index tables), `strings.data`, `<indexName>Unique.data`, `<indexName>Many.data`.

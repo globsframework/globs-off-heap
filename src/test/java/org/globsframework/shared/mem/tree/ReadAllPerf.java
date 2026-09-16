@@ -16,7 +16,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Stream;
 
 import static org.globsframework.shared.mem.tree.TestShared.MODULO;
 
@@ -66,7 +68,7 @@ public class ReadAllPerf {
         }
     }
 
-    @Param({"narrow", "wide"})
+    @Param({"narrow", "wide", "narrowFewKinds", "wideFewKinds"})  // the sweep runs -p shape=...
     public PerfTypeFamily.Shape shape;
 
     @Param({"off", "on", "loop", "chunk8", "chunk12", "chunk16", "chunk24"})
@@ -76,6 +78,8 @@ public class ReadAllPerf {
     private OffHeapRef[][] refs;
     private int cursor;
     private int family;
+    // one store per type per fork, ~14 MB each : left behind, a sweep of this benchmark fills /tmp
+    private final List<Path> directories = new ArrayList<>();
 
     @Setup
     public void setUp() throws IOException {
@@ -116,6 +120,7 @@ public class ReadAllPerf {
             OffHeapUniqueIndex offHeapUniqueIndex = offHeapService.declareUniqueIndex("uniqueIndex", uniqueFunctionalKeyBuilder);
 
             final Path path = Files.createTempDirectory("readallperf");
+            directories.add(path);
             offHeapService.createWrite(path).save(globs);
 
             readHeapServices[f] = offHeapService.createRead(path, arena);
@@ -130,6 +135,23 @@ public class ReadAllPerf {
                         .create());
             }
         }
+    }
+
+    /** The arena is the fork's, so the mappings die with it; the files do not. */
+    @TearDown
+    public void tearDown() throws IOException {
+        for (Path directory : directories) {
+            try (Stream<Path> content = Files.walk(directory)) {
+                content.sorted(Comparator.reverseOrder()).forEach(path -> {
+                    try {
+                        Files.deleteIfExists(path);
+                    } catch (IOException e) {
+                        // a fork that cannot clean up is not a failed measurement
+                    }
+                });
+            }
+        }
+        directories.clear();
     }
 
     private int next() {

@@ -5,6 +5,7 @@ import org.globsframework.core.metamodel.annotations.MaxSize;
 import org.globsframework.core.metamodel.fields.*;
 import org.globsframework.shared.mem.field.handleacces.*;
 import org.globsframework.shared.mem.model.HeapInline;
+import org.globsframework.shared.mem.model.HeapLoopRead;
 import org.globsframework.shared.mem.tree.impl.read.GeneratedWalkReader;
 import org.globsframework.shared.mem.tree.impl.read.GlobReader;
 import org.globsframework.shared.mem.tree.impl.read.PartitionedGlobReader;
@@ -21,9 +22,13 @@ public class OffHeapTypeInfo {
     /** the read walk over {@link #handleAccesses} — every read of a whole record goes through it */
     public final GlobReader reader;
     /**
-     * What a whole-file walk reads with : the generated caller when something is installed to generate one,
-     * else the same {@link #reader} every other read goes through. Shared like it, for the same reason —
-     * neither holds anything per record.
+     * What a whole-file walk reads with : the generated class when something is installed to generate one and
+     * the type did not ask otherwise, else the same {@link #reader} every other read goes through. Shared
+     * like it, for the same reason — neither holds anything per record.
+     * <p>
+     * The generated one is the default because it is faster on most types, and {@link HeapLoopRead} is how a
+     * type whose measurement says otherwise says so. Which type that is cannot be told from its shape — see
+     * that annotation.
      */
     public final GlobReader walkReader;
     private final long sizeWithPadding;
@@ -35,7 +40,8 @@ public class OffHeapTypeInfo {
         this.groupLayout = groupLayout;
         this.handleAccesses = handleAccesses;
         this.reader = PartitionedGlobReader.create(handleAccesses);
-        final GlobReader generated = GeneratedWalkReader.readerFor(type, handleAccesses);
+        final GlobReader generated = type.hasAnnotation(HeapLoopRead.UNIQUE_KEY) ? null
+                : GeneratedWalkReader.readerFor(type, handleAccesses);
         this.walkReader = generated != null ? generated : this.reader;
         this.sizeWithPadding = sizeWithPadding;
     }
