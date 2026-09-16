@@ -1,0 +1,14 @@
+// Puts the partitioned walk in the generated walk's inlining state -- see "The generated walk" in CLAUDE.md. Costs 2.5 %.
+[
+  {
+    match: ["*::*"],
+    c2: {
+      inline: [
+        "-org.globsframework.shared.mem.field.handleacces.IntegerFieldHandleAccess::readAtOffset",
+        "-org.globsframework.shared.mem.field.handleacces.LongFieldHandleAccess::readAtOffset",
+        "-org.globsframework.shared.mem.field.handleacces.IntArrayFieldHandleAccess::readAtOffset",
+        "-org.globsframework.shared.mem.field.handleacces.FixSize7BitsStringFieldHandleAccess::readAtOffset"
+      ]
+    }
+  }
+]

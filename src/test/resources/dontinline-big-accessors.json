@@ -1,0 +1,13 @@
+// Frees the generated walk's inlining budget by refusing the three big leaves -- see "The generated walk" in CLAUDE.md. Changes nothing.
+[
+  {
+    match: ["*::*"],
+    c2: {
+      inline: [
+        "-org.globsframework.shared.mem.field.handleacces.FixSizeStringFieldHandleAccess::readAtOffset",
+        "-org.globsframework.shared.mem.field.handleacces.StringFieldHandleAccess::readAtOffset",
+        "-org.globsframework.shared.mem.field.handleacces.DateTimeFieldHandleAccess::readAtOffset"
+      ]
+    }
+  }
+]

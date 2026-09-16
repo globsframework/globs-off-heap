@@ -166,15 +166,20 @@ caller does beat the megamorphic loop it exists to replace, by 4.8 %. But gettin
 unboxing per field and a `Long` per record, where `PartitionedGlobReader` calls `readAtOffset` directly on a
 final concrete class.
 
-Two experiments say what it is *not*, and both used `-XX:CompilerDirectivesFile` (hsdis + `-prof perfasm`
-work here, the JDK has `hsdis-amd64.so` in its lib):
+Two experiments say what it is *not*. Both are `-XX:CompilerDirectivesFile` files kept in
+`src/test/resources` (hsdis + `-prof perfasm` work here too, the JDK has `hsdis-amd64.so` in its lib):
 
-- de-inlining the cheap accessors (`-Integer`, `-Long`, `-IntArray`, `-FixSize7Bits` `::readAtOffset`) puts
-  the *partitioned* arm into the generated arm's compilation state — where perfasm shows those four compiled
-  standalone instead of folded into the per-kind loops. It costs **2.5 %** (144.3 → 140.6), not 19. The
-  de-inlining seen in the profile is a symptom, not the cause.
-- forbidding the three big leaves (`FixSizeString`, `String`, `DateTime`) to inline in the *generated* arm,
-  which frees the budget for the small ones, changes **nothing** (117.5 → 117.2).
+- `deinline-cheap-accessors.json` puts the *partitioned* arm into the generated arm's compilation state — it
+  refuses to inline the four accessors perfasm shows compiled standalone under the generated caller and
+  folded into the per-kind loops without it. It costs **2.5 %** (144.3 → 140.6), not 19. The de-inlining seen
+  in the profile is a symptom, not the cause.
+- `dontinline-big-accessors.json` refuses the three big leaves in the *generated* arm, which frees the
+  inlining budget for the small ones: **nothing** (117.5 → 117.2).
+
+Run either through JMH with
+`-jvmArgsAppend "-XX:+UnlockDiagnosticVMOptions -XX:CompilerDirectivesFile=src/test/resources/<file>"`. The
+unlock flag has to come first, and HotSpot's parser takes **exactly one** comment line, at the very top of
+the file — a second one, or one inside the JSON, is a syntax error. Hence the explanation living here.
 
 So the inlining budget is not what this loses to — which also explains why the chunk below changes nothing.
 The counters agree with the decomposition rather than with the budget: +8 % instructions (~19 per field read,
