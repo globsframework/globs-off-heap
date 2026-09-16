@@ -13,7 +13,6 @@ import org.globsframework.shared.mem.impl.Dummy2Type;
 import org.globsframework.shared.mem.impl.Dummy3Type;
 import org.globsframework.shared.mem.tree.impl.OffHeapGlobTypeGroupLayoutImpl;
 import org.globsframework.shared.mem.tree.impl.OffHeapTypeInfo;
-import org.globsframework.shared.mem.tree.impl.read.CallerGlobReader;
 import org.globsframework.shared.mem.tree.impl.read.GlobReader;
 import org.globsframework.shared.mem.tree.impl.read.PartitionedGlobReader;
 import org.junit.jupiter.api.AfterEach;
@@ -76,11 +75,11 @@ public class GeneratedReadAllTest {
     @Test
     public void theWalkIsGeneratedOnlyWhenSomethingIsInstalledToGenerate() {
         Assertions.assertNull(ToGlobCallerFactory.generated());
-        Assertions.assertFalse(walkReaderOf(Dummy1Type.TYPE) instanceof CallerGlobReader);
+        Assertions.assertInstanceOf(PartitionedGlobReader.class, walkReaderOf(Dummy1Type.TYPE));
 
         installGenerator();
         Assertions.assertNotNull(ToGlobCallerFactory.generated());
-        Assertions.assertInstanceOf(CallerGlobReader.class, walkReaderOf(Dummy1Type.TYPE));
+        Assertions.assertFalse(walkReaderOf(Dummy1Type.TYPE) instanceof PartitionedGlobReader);
     }
 
     private static GlobReader walkReaderOf(GlobType type) {
@@ -106,7 +105,10 @@ public class GeneratedReadAllTest {
         installGenerator();
         final OffHeapTypeInfo typeInfo = typeInfoOf(Dummy1Type.TYPE);
 
-        Assertions.assertInstanceOf(CallerGlobReader.class, typeInfo.walkReader);
+        Assertions.assertFalse(typeInfo.walkReader instanceof PartitionedGlobReader);
+        // it is the generated class itself, not something holding it : no adapter left
+        Assertions.assertTrue(typeInfo.walkReader.getClass().getName().startsWith("org.globsframework.gen."),
+                typeInfo.walkReader.getClass().getName());
         Assertions.assertSame(typeInfo.walkReader, typeInfo.walkReader);
         Assertions.assertInstanceOf(PartitionedGlobReader.class, typeInfo.reader);
 

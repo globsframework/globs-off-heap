@@ -5,7 +5,7 @@ import org.globsframework.core.metamodel.annotations.MaxSize;
 import org.globsframework.core.metamodel.fields.*;
 import org.globsframework.shared.mem.field.handleacces.*;
 import org.globsframework.shared.mem.model.HeapInline;
-import org.globsframework.shared.mem.tree.impl.read.CallerGlobReader;
+import org.globsframework.shared.mem.tree.impl.read.GeneratedWalkReader;
 import org.globsframework.shared.mem.tree.impl.read.GlobReader;
 import org.globsframework.shared.mem.tree.impl.read.PartitionedGlobReader;
 import org.slf4j.Logger;
@@ -35,7 +35,7 @@ public class OffHeapTypeInfo {
         this.groupLayout = groupLayout;
         this.handleAccesses = handleAccesses;
         this.reader = PartitionedGlobReader.create(handleAccesses);
-        final GlobReader generated = CallerGlobReader.readerFor(type, handleAccesses);
+        final GlobReader generated = GeneratedWalkReader.readerFor(type, handleAccesses);
         this.walkReader = generated != null ? generated : this.reader;
         this.sizeWithPadding = sizeWithPadding;
     }

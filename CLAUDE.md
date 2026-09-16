@@ -117,112 +117,84 @@ an indexed `VarHandle` could only ever hand over one element.
 
 `BulkReadRoundTripTest` is the guard: empty and full-width strings, a byte above 127 on the "7 bits" kind,
 null vs empty, and **alternating zone ids** (long then short, so a stale memo cannot match on a prefix).
-
 ### The generated walk
 
-`readAll` without the `onlyFields` predicate — and only that path — can build its walk as a
-`ToGlobCallerAll` emitted by globs-generate instead of the loops of `PartitionedGlobReader`: the
-`HandleAccess[]` unrolled into one call site per field, each reading its function from a `static final` of
-the generated class, so the receiver is a JIT constant there. `CallerGlobReader` builds it,
-`OffHeapTypeInfo.walkReader` holds it (the partitioned reader itself when nothing generates), and
-`ReadAllPerf` is the benchmark, with a `caller` param JMH forks a JVM for.
+`readAll` without the `onlyFields` predicate — and only that path — can build its walk as a class emitted by
+globs-generate instead of the loops of `PartitionedGlobReader`: the `HandleAccess[]` unrolled into one call
+site per field, each reading its accessor from a `static final`, so the receiver is a JIT constant there.
+`GeneratedWalkReader` builds it, `OffHeapTypeInfo.walkReader` holds it (the partitioned reader itself when
+nothing generates), and `ReadAllPerf` is the benchmark, with a `caller` param JMH forks a JVM for.
 
-**The offset is boxed, once per record.** `ToGlobFunction.call` carries three *object* contexts, and the
-offset is a `long`, so it travels as a `Long` handed to every function of that record — one `Long.valueOf`
-per record against one `longValue()` per field. The alternative, a mutable cursor object holding segment and
-offset, was measured and is **worse on the shape that matters** (wide: 109.0 against 114.1 ops/s — two
-`getfield` per field cost more than one allocation per record) and, much more importantly, it makes the
-reader stateful. A `GlobReader` must not be: `OffHeapTypeInfo.reader` and `walkReader` are public, shared per
-type, read concurrently, and re-entered from the nested kinds. Carrying the walk in the arguments is what
-keeps that contract. Paying a primitive slot instead — `call(data, segment, long, ctx)` — would need a new
-caller shape in core plus its emitter (~40 lines of ASM, the same one globs-fix is waiting for).
+**Nothing is adapted, and that is the whole design.** The emitted class implements `GlobReader` itself and
+calls `HandleAccess.readAtOffset` itself, through core's typed factory shape —
+`create(name, functions, GlobReader.class, HandleAccess.class, MutableGlob.class, MemorySegment.class,
+long.class, ReadContext.class)`. The two interfaces were written independently and their methods are not even
+named alike, but they take the same parameters, which is what that shape matches on. So there is no wrapper
+object, no generic bridge, no checkcast, no boxed offset: one LLOAD for the offset, and the generated class
+*is* the reader rather than something holding one.
 
-**Measured, and not worth adopting** (JDK 24, four types, 5 forks × 5 iterations, one op = one pass over
-10 000 records):
-
-| `readAll` | partitioned | generated | |
+| `readAll`, 5 forks × 5 iterations | partitioned | generated | |
 | --- | --- | --- | --- |
-| narrow, 15 fields | 394.8 ± 7.8 ops/s | 405.2 ± 16.9 | +2.6 %, inside the noise |
-| wide, 45 fields | **140.5 ± 1.8** | 114.1 ± 1.2 | **−18.8 %** |
+| narrow, 15 fields | 415.3 ± 6.4 | **462.9 ± 6.8** | **+11.5 %** |
+| wide, 45 fields | **145.7 ± 1.6** | 130.4 ± 0.7 | **−10.5 %** |
 
-`read` — one record, on the partitioned reader in both arms — is the control, and what it does is worth
-knowing: it moves by up to ~4 % between arms (here 1746 k against 1680 k on wide; in an earlier run it was
-narrow that moved and wide that did not). That is this benchmark's floor, and it is the size of the whole
-narrow "gain" — so the honest reading of the table is *nothing on narrow, a clear loss on wide*.
+`read` — one record, on the partitioned reader in both arms — is the control and does not move
+(4412 k / 4476 k narrow, 1781 k / 1773 k wide).
 
-**Why — decomposed, not guessed.** Three arms over the same walk (wide, 5 forks), `ReadAllPerf`'s `loop`
-being the generated one's own code path with core's plain loop in place of the emitted method: same wrappers,
-same boxed offset, same per-field unboxing, no unrolling.
+**What the shape is worth**: the same walk through `ToGlobFunction`, i.e. with the adapter and the boxed
+offset, measured 405.2 narrow and 114.1 wide. Dropping the adaptation is **+14 %** on both, and it is what
+turns narrow from noise into a win. The counters say why, and they say it cleanly — the generated arm now
+runs **fewer instructions than the partitioned one** (103.7 M against 106.9 M per pass; through
+`ToGlobFunction` it was 116.2 M), and its icache misses are *lower* too (1 592 against 3 414; the adapter
+classes were what polluted it, 9 152). Two explanations died there: the adaptation was the cost, not the
+inlining budget (the chunk below) and not the size of 45 inlined bodies.
 
-| wide | ops/s | |
-| --- | --- | --- |
-| `off` — partitioned, direct call on a final class | **141.7 ± 2.8** | |
-| `loop` — through `ToGlobFunction`, core's loop | 112.6 ± 1.0 | **−20.5 %** |
-| `on` — through `ToGlobFunction`, unrolled and generated | 118.0 ± 1.2 | **+4.8 %** over `loop` |
+**What is left on wide is pure IPC**: 3.087 → 2.653 over the same instruction stream, i.e. 13 % more cycles
+for slightly less work, with branch misses up 59 % (worth about a seventh of the gap). A long straight line
+decodes worse than a short hot loop — µop cache residency, which no icache counter shows — and that is not
+something the API can fix.
 
-**Generating pays what it promises — and the adaptation to the SPI costs four times more.** The unrolled
-caller does beat the megamorphic loop it exists to replace, by 4.8 %. But getting the record through
-`ToGlobFunction` costs 20 % first: one call level more (`FieldRead::call`), the bridge's three checkcasts, an
-unboxing per field and a `Long` per record, where `PartitionedGlobReader` calls `readAtOffset` directly on a
-final concrete class.
+**So whether unrolling wins depends on the type, and predictably so.** A loop per kind amortizes *one*
+inlined body over every field of that kind; unrolling needs one per field. Narrow is 15 fields over ~14
+kinds, so each loop runs once and its overhead dominates: unrolling wins by 11.5 %. Wide is three fields per
+kind, the loop amortizes, and unrolling loses by 10.5 %. Fields per kind is the number to look at before
+adopting this for a type — it is not a global answer.
 
-Two experiments say what it is *not*. Both are `-XX:CompilerDirectivesFile` files kept in
-`src/test/resources` (hsdis + `-prof perfasm` work here too, the JDK has `hsdis-amd64.so` in its lib):
+**The chunk does not rescue the wide shape** (`-Dglobs.caller.toGlob.chunk=<n>`, added to globs-generate for
+this, and which the typed shape does not implement — it always emits one method). Measured on the earlier
+`ToGlobFunction` walk: 113.9 ± 1.7 for one method against 114.3 ± 8.5 for chunks of 12, the same number with
+five times the spread. Inlining is decided from the compilation root and is transitive, so splitting the
+emitted method does not reduce how much code sits under that root.
 
-- `deinline-cheap-accessors.json` puts the *partitioned* arm into the generated arm's compilation state — it
-  refuses to inline the four accessors perfasm shows compiled standalone under the generated caller and
-  folded into the per-kind loops without it. It costs **2.5 %** (144.3 → 140.6), not 19. The de-inlining seen
-  in the profile is a symptom, not the cause.
-- `dontinline-big-accessors.json` refuses the three big leaves in the *generated* arm, which frees the
-  inlining budget for the small ones: **nothing** (117.5 → 117.2).
-
-Run either through JMH with
+**Two `-XX:CompilerDirectivesFile` files in `src/test/resources`** settled what the loss was *not*, back when
+it was 19 %: `deinline-cheap-accessors.json` puts the partitioned arm into the generated arm's compilation
+state and costs 2.5 %, `dontinline-big-accessors.json` frees the generated arm's inlining budget and changes
+nothing. Run either with
 `-jvmArgsAppend "-XX:+UnlockDiagnosticVMOptions -XX:CompilerDirectivesFile=src/test/resources/<file>"`. The
 unlock flag has to come first, and HotSpot's parser takes **exactly one** comment line, at the very top of
-the file — a second one, or one inside the JSON, is a syntax error. Hence the explanation living here.
+the file — a second one, or one inside the JSON, is a syntax error.
 
-So the inlining budget is not what this loses to — which also explains why the chunk below changes nothing.
-The counters agree with the decomposition rather than with the budget: +8 % instructions (~19 per field read,
-i.e. the bridge, the casts and the unboxing, not folded), IPC 3.19 → 2.78, and GC 4.03 % → 6.59 % of cycles,
-which is the boxed `Long`.
+The walk is generated **only** when `-Dglobs.caller.toGlob=…AsmCallerWriteGeneratorService` installs a
+generating factory; `ToGlobCallerFactory.generated()` answers null otherwise and `walkReader` is the
+partitioned reader, unchanged. Core's looped factory is deliberately not a fallback — its typed shape is a
+reflective proxy, slower than anything here. globs-generate is a **test** dependency: main code only names
+core's SPI.
 
-**The way out, if this is ever picked up:** a caller whose `call` carries `(MutableGlob, MemorySegment, long,
-ReadContext)` — the exact signature of `readAtOffset`, so a `HandleAccess` *is* the function: no wrapper, no
-bridge, no cast, no boxing. That removes the 20 % handicap by construction and leaves the 4.8 % the unrolling
-earns. It needs a primitive-carrying caller shape in core plus its emitter in globs-generate (~40 lines of
-ASM over `AsmCallerWriteGenerator`, the same one globs-fix is waiting for). Anything short of that — chunks,
-inlining directives, a different wrapper — is working on the 5 % and not on the 20 %.
-
-**The chunk does not rescue it, measured.** globs-generate can emit the unrolled caller in several methods
-instead of one (`-Dglobs.caller.toGlob.chunk=<n>`, added for this), which was the obvious suspect: an
-unrolled call is ~12 bytes, so 45 of them are ~540, past `FreqInlineSize` (325), and the whole `call` stops
-being inlined. `ReadAllPerf`'s `caller` param takes `chunk8`/`chunk12`/`chunk16`/`chunk24` for that. A sweep
-at 3 forks looked like it paid (wide, chunk 12: 118.9 ± 1.1 against 111.8 for one method); at 5 forks it does
-not reproduce — **113.9 ± 1.7 for one method against 114.3 ± 8.5 for chunks of 12**, i.e. the same number
-with five times the spread. That spread is the finding: splitting makes the compilation plan more variable,
-not better, and the bytecode budget is not what the wide shape is losing to. Do not re-run the chunk sweep at
-3 forks and believe it.
-
-So the generated walk is built **only** when `-Dglobs.caller.toGlob=…AsmCallerWriteGeneratorService` installs
-a generating factory; `ToGlobCallerFactory.generated()` answers null otherwise and `walkReader` is the
-partitioned reader, unchanged. Core's looped `LoopToGlobCallerFactory` is deliberately not a fallback — it is
-the megamorphic loop the partitioned reader already beats. globs-generate is a **test** dependency here: main
-code only ever names core's SPI.
-
-One detail to keep if this is picked up again: the leaves are wrapped in a **record** so that C2 folds its
-final field and devirtualizes `readAtOffset` (it does not fold an ordinary class's), while the four
-Glob-valued kinds are wrapped in an ordinary class **on purpose**, to keep an inlining barrier where a
-sub-record hangs — globs-bin-serialisation measured −12 % for folding that descent.
+One consequence of having no wrapper left: the four Glob-valued kinds are now called through a constant
+receiver like every other, so the descent into a sub-record is foldable, where the `ToGlobFunction` version
+deliberately kept an ordinary class in front of them as an inlining barrier (globs-bin-serialisation measured
+−12 % for folding that descent). No type in `ReadAllPerf` has a nested Glob, so this benchmark says nothing
+about it.
 
 Still on the table, in rough order of what a profile says:
 
 - splitting the `HandleAccess[]` walk per field kind is **done** — `PartitionedGlobReader`, one monomorphic
   loop per kind instead of one megamorphic call site for the ~14 implementations. What is left of that cost
   is the missed inlining, and "The generated walk" above says what removing it is worth.
-- if the generated walk is picked up again, the two suspects left for the wide shape are the record wrapper's
-  extra level (give `HandleAccess` the `ToGlobFunction` shape itself and the level and its bridge are gone, at
-  the cost of a super-interface on the leaves — globs-grpc measured ~5 % against it on its array path) and the
-  sheer size of 45 inlined bodies. Not the bytecode budget: the chunk settled that.
+- picking the walk per type rather than per process: the generated one wins on a type whose fields are spread
+  over many kinds and loses on one with several fields per kind (+11.5 % / −10.5 % here). `OffHeapTypeInfo`
+  has both readers at hand and knows the field kinds, so the choice is a ratio away — what is missing is
+  shapes between 15 and 45 fields to put the threshold somewhere honest.
 - `readStrings` is a `Map<Integer, String>`, so every interned-string read boxes its address (`IntHashMap` is
   already imported there, unused).
 - every scalar field is boxed on its way into `DefaultGlob`'s `Object[]` — `GlobSetIntAccessor.set` takes an

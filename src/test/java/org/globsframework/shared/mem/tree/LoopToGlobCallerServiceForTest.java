@@ -6,11 +6,11 @@ import org.globsframework.core.model.caller.ToGlobCallerService;
 
 /**
  * Installs core's looped factory where a generating one is expected, so that {@code ReadAllPerf}'s `loop`
- * arm goes through the whole CallerGlobReader path — the same wrappers, the same boxed offset, the same
- * per-field unboxing — with the unrolling as the only difference against the `on` arm.
+ * arm measures what a JVM with nothing to generate would get if it asked for the typed shape anyway : a
+ * reflective Proxy, which boxes every primitive on every call.
  * <p>
- * It is what separates what the shape of the emitted code costs from what carrying the arguments costs;
- * production never installs this, `generated()` answering null is what keeps the partitioned reader.
+ * It is the floor of the comparison. Production never installs this — {@code generated()} answering null is
+ * what keeps the partitioned reader — and globs-off-heap deliberately does not fall back on it.
  */
 public class LoopToGlobCallerServiceForTest implements ToGlobCallerService {
 
