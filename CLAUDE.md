@@ -133,21 +133,30 @@ named alike, but they take the same parameters, which is what that shape matches
 object, no generic bridge, no checkcast, no boxed offset: one LLOAD for the offset, and the generated class
 *is* the reader rather than something holding one.
 
-| `readAll`, 5 forks × 5 iterations | partitioned | generated | |
+| `readAll`, 5 forks × 5 iterations (JDK 24.0.1) | partitioned | generated | |
 | --- | --- | --- | --- |
-| narrow, 15 fields | 415.3 ± 6.4 | **462.9 ± 6.8** | **+11.5 %** |
-| wide, 45 fields | **142.4 ± 3.2** | 129.8 ± 1.4 | **−8.8 %** |
+| narrow, 15 fields | 396.8 ± 7.4 | **435.9 ± 7.8** | **+9.8 %** |
+| wide, 45 fields | **139.4 ± 1.5** | 127.0 ± 0.8 | **−8.8 %** |
+| narrowFewKinds | 1418.9 ± 70.6 | **1920.5 ± 38.3** | **+35 %** |
+| wideFewKinds | 565.3 ± 10.1 | **628.8 ± 1.9** | **+11 %** |
 
 `read` — one record, on the partitioned reader in both arms — is the control and does not move
-(4412 k / 4476 k narrow, 1781 k / 1773 k wide).
+(4387 k / 4410 k narrow, 1756 k / 1739 k wide).
+
+Re-measured after core's caller SPI lost its erased interfaces, which changed nothing here — this module was
+already on the typed shape, and the four ratios came back within two points of the run that produced them
+(+11.5 / −8.8 / +31 / +10 %), `wide` to the decimal. The absolute throughputs are 4-6 % below that run, which
+is the machine and the JDK, not the code.
 
 **Which of the two wins is not predictable from the type**, and that is a measured statement, not a shrug.
 `ReadAllPerf`'s `shape` param carries twelve of them; the generated walk wins ten, from +2 % to +31 %, and
-loses two — `wide` and `wideSmallBig`. Five candidate rules were measured and each refuted:
+loses two — `wide` and `wideSmallBig`. Only the four default shapes were re-measured since (the table above);
+the twelve-shape sweep and the five refutations below are from the original run and were not redone.
+Five candidate rules were measured and each refuted:
 
 | candidate rule | what killed it |
 | --- | --- |
-| fields per kind (a loop amortizes one inlined body per kind) | `narrowFewKinds`, 5 fields per kind, wins **+31 %** — the biggest win of all |
+| fields per kind (a loop amortizes one inlined body per kind) | `narrowFewKinds`, 5 fields per kind, wins **+31 %** (**+35 %** on the later run) — the biggest win of all |
 | field count (the unrolled method's size) | `wideFewKinds`, 45 fields, wins +10 % |
 | how much big-bodied accessor code the type holds | 45 fields of which 24 fixed-size strings wins **+20 %**; the sweep `mixed6…mixed36` wins at every point |
 | number of distinct kinds | `kinds15` — 45 fields, 15 kinds, like `wide` — wins **+11.9 %** in the same run where `wide` loses 8.8 % |
@@ -190,10 +199,18 @@ decodes worse than a short hot loop — µop cache residency, which no icache co
 something the API can fix.
 
 **The chunk does not rescue the wide shape** (`-Dglobs.caller.toGlob.chunk=<n>`, added to globs-generate for
-this, and which the typed shape does not implement — it always emits one method). Measured on the earlier
-`ToGlobFunction` walk: 113.9 ± 1.7 for one method against 114.3 ± 8.5 for chunks of 12, the same number with
-five times the spread. Inlining is decided from the compilation root and is transitive, so splitting the
-emitted method does not reduce how much code sits under that root.
+this). Measured twice, on two different emitters, with the same answer. On the earlier `ToGlobFunction`
+walk: 113.9 ± 1.7 for one method against 114.3 ± 8.5 for chunks of 12, the same number with five times the
+spread. And now on the typed walk, `wide`, three forks — the chunk having been carried over to the typed
+shape when the from-Glob side was generalised, where for a while it was not implemented at all:
+
+| `wide` | one method | chunk 8 | chunk 12 | chunk 16 | chunk 24 |
+| --- | --- | --- | --- | --- | --- |
+| `readAll` | 127.1 ± 2.1 | 127.6 ± 1.6 | 126.5 ± 2.3 | 126.6 ± 0.5 | 126.4 ± 1.8 |
+
+Four chunk sizes, one number, against 140.1 ± 3.1 for the partitioned reader. Inlining is decided from the
+compilation root and is transitive, so splitting the emitted method does not reduce how much code sits under
+that root — which is why the answer did not depend on which emitter produced the methods.
 
 **Two `-XX:CompilerDirectivesFile` files in `src/test/resources`** settled what the loss was *not*, back when
 it was 19 %: `deinline-cheap-accessors.json` puts the partitioned arm into the generated arm's compilation
