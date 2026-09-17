@@ -159,7 +159,9 @@ outcome, not a property of the type — so the library does not guess: the gener
 `HeapLoopRead` on a GlobType is how one that measured otherwise keeps the loops. Put it on a type only with a
 `readAll` benchmark behind it.
 
-**What the shape is worth****What the shape is worth**: the same walk through `ToGlobFunction`, i.e. with the adapter and the boxed
+**What the shape is worth** (`ToGlobFunction` below is core's old erased function interface — this
+measurement is what got it removed, and `ToGlobCallerFactory` now has only the typed shape): the same walk
+through `ToGlobFunction`, i.e. with the adapter and the boxed
 offset, measured 405.2 narrow and 114.1 wide. Dropping the adaptation is **+14 %** on both, and it is what
 turns narrow from noise into a win. The counters say why, and they say it cleanly — the generated arm now
 runs **fewer instructions than the partitioned one** (103.7 M against 106.9 M per pass; through
