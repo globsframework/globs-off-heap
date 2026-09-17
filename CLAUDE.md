@@ -167,6 +167,21 @@ runs **fewer instructions than the partitioned one** (103.7 M against 106.9 M pe
 classes were what polluted it, 9 152). Two explanations died there: the adaptation was the cost, not the
 inlining budget (the chunk below) and not the size of 45 inlined bodies.
 
+**What `wide` loses to, as far as the tooling goes.** `perfasm` on the two 45-field shapes that disagree
+(`wide` and `kinds15`) shows one clear difference: on `wide` the four generated `read` methods carry ~16 % of
+the cycles, i.e. C2 inlined the big accessor bodies into the 45-site method, while on `kinds15` they never
+appear in the profile at all — the accessors stayed separate methods. Tempting, and measured:
+`dontinline-big-accessors.json` forces `wide` into `kinds15`'s situation and recovers **3 points of the 8.8**
+while dropping *both* arms in absolute terms (`off` 142.4 → 133.7). So over-inlining is a third of it at
+most, and putting a barrier back in the code — an ordinary class in front of the big kinds, the way the
+`ToGlobFunction` version had one — would be a net loss. There is no spill storm either: 1 % of the
+instructions in the generated method's hot regions are stack stores.
+
+Seven hypotheses have now been measured on this one shape and none of them carries the gap. What is left is
+that the same instruction stream schedules worse on this particular mix of fields, and the useful thing to
+know is that **the next idea should be tested before it is believed** — the files to do it with are in
+`src/test/resources`, and `ReadAllPerf`'s twelve shapes are there to keep an explanation honest.
+
 **What is left on wide is pure IPC**: 3.087 → 2.653 over the same instruction stream, i.e. 13 % more cycles
 for slightly less work, with branch misses up 59 % (worth about a seventh of the gap). A long straight line
 decodes worse than a short hot loop — µop cache residency, which no icache counter shows — and that is not
