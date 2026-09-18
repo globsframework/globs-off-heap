@@ -4,15 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Read `../CLAUDE.md` first: it describes the surrounding workspace (independent repos, directory ↔ artifactId
 mapping, cross-repo dependency propagation). This directory is `globs-shared` on disk but builds
-`org.globsframework:globs-off-heap`, currently `5.9-SNAPSHOT`, against `globs` 5.10.0.
+`org.globsframework:globs-off-heap`, currently `5.10-SNAPSHOT`, against `globs` 5.13-SNAPSHOT — plus
+`globs-generate` 5.5-SNAPSHOT, in test scope only.
 
 ## Build & test
 
-Java 22 source/target (local JDK is 25). No CI workflow and no `settings.xml` in this repo — resolution is
+Java 22 source/target; `JAVA_HOME` here is JDK 24.0.1, which is what every number below was measured on
+(a 25 is installed beside it). No CI workflow and no `settings.xml` in this repo — resolution is
 `~/.m2` or GitHub Packages.
 
 ```bash
-mvn -o test                                  # full suite, ~2-3 min (SearchTest/TestShared are perf-heavy)
+mvn -o test                                  # full suite, 25 tests, ~20 s (UtilsTest and TestShared carry most of it)
 mvn -o test -Dtest=SearchTest                # one class
 mvn -o test -Dtest=OffHeapHashServiceImplTest#withSameHash
 mvn -o test-compile
@@ -79,9 +81,16 @@ re-resolves a handle. `IndexTypeBuilder` does the same for index records, but wi
 
 ## What a read costs
 
-Measured with `ReadPerf`, four types, narrow / wide: the index descent is **2.67 M / 2.69 M ops/s** and
-materializing one Glob is **3.91 M / 1.54 M**. On a narrow record `find` and `read` now cost about the same;
-on a wide one `read` is still where the time goes. Optimize the read path, not the descent.
+Measured with `ReadPerf` (3 forks, nothing installed to generate, so the partitioned walk), four types,
+narrow / wide: the index descent is **2.70 M / 2.73 M ops/s** and materializing one Glob is
+**4.33 M / 1.75 M**; `findAndRead`, which does both, 1.22 M / 0.94 M. On a narrow record `find` and `read`
+cost about the same; on a wide one `read` is still where the time goes. Optimize the read path, not the
+descent.
+
+The two harnesses do not agree on `read`, and it is not the code: in the same session `ReadAllPerf`'s
+partitioned arm reads one record 10-12 % slower than `ReadPerf` does (3.87 M / 1.53 M against 4.33 M / 1.75 M)
+while the two land within 2 % of each other on `readAll` (391 / 140 against 399 / 143). Compare `read` numbers
+within one run, never across the two.
 
 **No `VarHandle` on the record path.** Every `HandleAccess` resolves its byte offset once, at `create` time,
 with `groupLayout.byteOffset(PathElement.groupElement(name))`, and reads through
@@ -119,11 +128,20 @@ an indexed `VarHandle` could only ever hand over one element.
 null vs empty, and **alternating zone ids** (long then short, so a stale memo cannot match on a prefix).
 ### The generated walk
 
-`readAll` without the `onlyFields` predicate — and only that path — can build its walk as a class emitted by
-globs-generate instead of the loops of `PartitionedGlobReader`: the `HandleAccess[]` unrolled into one call
-site per field, each reading its accessor from a `static final`, so the receiver is a JIT constant there.
-`GeneratedWalkReader` builds it, `OffHeapTypeInfo.walkReader` holds it (the partitioned reader itself when
-nothing generates), and `ReadAllPerf` is the benchmark, with a `caller` param JMH forks a JVM for.
+The walk over a whole record can be a class emitted by globs-generate instead of the loops of
+`PartitionedGlobReader`: the `HandleAccess[]` unrolled into one call site per field, each reading its accessor
+from a `static final`, so the receiver is a JIT constant there. `GeneratedWalkReader` builds it and
+`OffHeapTypeInfo.reader` holds it — one reader per type, which is the partitioned one when nothing generates
+or when the type carries `HeapLoopRead`.
+
+**It serves every whole-record read**, not only `readAll`: `read(offset)`, `read(type, offset)`,
+`read(long[], consumer)`, `readAll` without a predicate, and the descent of the inline kinds all go through
+that one field. (Until `bfc7c2c` a second field, `walkReader`, kept the generated walk for `readAll` alone and
+left every other read on the partitioned loops — which is why the older measurements below could use `read`
+as a control.) The two paths that ask for a subset of the fields keep their own walk:
+`readAll(consumer, onlyFields)` builds a `PartitionedGlobReader` over the selected accessors,
+`read(offset, onlyFields)` filters in place. `ReadAllPerf` is the benchmark, with a `caller` param JMH forks
+a JVM for.
 
 **Nothing is adapted, and that is the whole design.** The emitted class implements `GlobReader` itself and
 calls `HandleAccess.readAtOffset` itself, through core's typed factory shape —
@@ -135,28 +153,59 @@ object, no generic bridge, no checkcast, no boxed offset: one LLOAD for the offs
 
 | `readAll`, 5 forks × 5 iterations (JDK 24.0.1) | partitioned | generated | |
 | --- | --- | --- | --- |
-| narrow, 15 fields | 396.8 ± 7.4 | **435.9 ± 7.8** | **+9.8 %** |
-| wide, 45 fields | **139.4 ± 1.5** | 127.0 ± 0.8 | **−8.8 %** |
-| narrowFewKinds | 1418.9 ± 70.6 | **1920.5 ± 38.3** | **+35 %** |
-| wideFewKinds | 565.3 ± 10.1 | **628.8 ± 1.9** | **+11 %** |
+| narrow, 15 fields | 391.1 ± 13.5 | **429.7 ± 15.7** | **+9.9 %** |
+| wide, 45 fields | **139.8 ± 1.4** | 120.7 ± 4.2 | **−13.7 %** ‡ |
+| narrowFewKinds | 1482.2 ± 8.6 | **1992.7 ± 11.5** | **+34.4 %** |
+| wideFewKinds | 582.7 ± 2.7 | **642.5 ± 3.3** | **+10.3 %** |
 
-`read` — one record, on the partitioned reader in both arms — is the control and does not move
-(4387 k / 4410 k narrow, 1756 k / 1739 k wide).
+‡ a low draw of a noisy arm: ten forks put that shape back at −9.2 %, see below.
 
-Re-measured after core's caller SPI lost its erased interfaces, which changed nothing here — this module was
-already on the typed shape, and the four ratios came back within two points of the run that produced them
-(+11.5 / −8.8 / +31 / +10 %), `wide` to the decimal. The absolute throughputs are 4-6 % below that run, which
-is the machine and the JDK, not the code.
+**`read` is no longer a control**, and the same run now says something the older tables could not. It was a
+control as long as `walkReader` kept the generated walk for `readAll` alone: one record went through the
+partitioned reader in both arms and did not move (4387 k / 4410 k narrow, 1756 k / 1739 k wide). Since
+`bfc7c2c` it goes through whatever reader the type has, so it measures the generated walk on a pass one
+record long:
+
+| `read`, one record, k ops/s, same run | partitioned | generated | |
+| --- | --- | --- | --- |
+| narrow | 3868 ± 90 | **4761 ± 31** | **+23.1 %** |
+| wide | 1533 ± 94 | **1701 ± 10** | **+11.0 %** |
+| narrowFewKinds | 12548 ± 197 | **16530 ± 607** | **+31.7 %** |
+| wideFewKinds | **5154 ± 108** | 4968 ± 64 | **−3.6 %** |
+
+The two tables disagree on which shape loses — `wide` gains 11 % on one record while losing 9-10 % on ten
+thousand, `wideFewKinds` does the reverse — and the two are not the same compilation anyway (one record
+reached through an index ref, against ten thousand walked sequentially inside `readAll`). What the pair does
+say is that the `wide` loss is not the emitted per-field code: that code wins when the pass is one record
+long.
+
+Re-measured after `bfc7c2c` merged the two reader fields (both tables above). The partitioned arm reproduces
+the run before it — 139.8 against 139.4 on `wide`, within 5 % on the other three — while the generated arm
+came out 5 % lower on `wide` alone (127.0 → 120.7), which is what takes that row to −13.7 %.
+
+**That −13.7 % is a sampling artefact, and `wide` re-run alone at ten forks says so**: 137.5 ± 4.1
+partitioned against 124.9 ± 1.4 generated, **−9.2 %**, or −10.1 % on the medians (140.2 / 126.1), which is the
+−8.8 % that shape has always measured. Nothing is bimodal — the generated arm spreads 118.5 … 127.4 fork to
+fork, its best forks landing exactly on the 127.0 of the earlier run, and a five-fork mean of a 7 %-wide
+distribution simply wobbles by three points. (The partitioned arm is tighter but not immune: one fork of the
+ten came in at 113.6 against 137-142.5 for the other nine, which is what its ± 4.1 is.) So **read `wide` as
+−9 to −10 %, and read any five-fork number on this benchmark with ± 3 points around it.**
+
+The run before those, after core's caller SPI lost its erased interfaces, had changed nothing here: this
+module was already on the typed shape, and its four ratios came back within two points of the run that
+produced them (+11.5 / −8.8 / +31 / +10 %).
 
 **Which of the two wins is not predictable from the type**, and that is a measured statement, not a shrug.
-`ReadAllPerf`'s `shape` param carries twelve of them; the generated walk wins ten, from +2 % to +31 %, and
-loses two — `wide` and `wideSmallBig`. Only the four default shapes were re-measured since (the table above);
-the twelve-shape sweep and the five refutations below are from the original run and were not redone.
+`PerfTypeFamily.Shape` carries fifteen of them; twelve have been swept, and the generated walk wins ten of
+those, from +2 % to +31 %, and loses two — `wide` and `wideSmallBig`. The `kinds4`/`kinds6`/`kinds9`/`kinds12`
+shapes were added to interpolate that series and have never been measured. Only the four default shapes were
+re-measured since (the table above); the twelve-shape sweep and the five refutations below are from the
+original run and were not redone.
 Five candidate rules were measured and each refuted:
 
 | candidate rule | what killed it |
 | --- | --- |
-| fields per kind (a loop amortizes one inlined body per kind) | `narrowFewKinds`, 5 fields per kind, wins **+31 %** (**+35 %** on the later run) — the biggest win of all |
+| fields per kind (a loop amortizes one inlined body per kind) | `narrowFewKinds`, 5 fields per kind, wins **+31 %** (+35 % and +34 % on the two later runs) — the biggest win of all |
 | field count (the unrolled method's size) | `wideFewKinds`, 45 fields, wins +10 % |
 | how much big-bodied accessor code the type holds | 45 fields of which 24 fixed-size strings wins **+20 %**; the sweep `mixed6…mixed36` wins at every point |
 | number of distinct kinds | `kinds15` — 45 fields, 15 kinds, like `wide` — wins **+11.9 %** in the same run where `wide` loses 8.8 % |
@@ -165,8 +214,9 @@ Five candidate rules were measured and each refuted:
 `wide` and `kinds15` have the same field count, the same fifteen kinds and the same ten accessor classes, and
 differ by three fields (9 int / 3 double against 6 / 6). They land twenty points apart. This is a JIT
 outcome, not a property of the type — so the library does not guess: the generated walk is the default, and
-`HeapLoopRead` on a GlobType is how one that measured otherwise keeps the loops. Put it on a type only with a
-`readAll` benchmark behind it.
+`HeapLoopRead` on a GlobType is how one that measured otherwise keeps the loops — for every read of that
+type, not only its full passes. Put it on a type only with a benchmark behind it, and measure both passes:
+`readAll` and `read` do not always point the same way (see the two tables above).
 
 **What the shape is worth** (`ToGlobFunction` below is core's old erased function interface — this
 measurement is what got it removed, and `ToGlobCallerFactory` now has only the typed shape): the same walk
@@ -191,7 +241,7 @@ instructions in the generated method's hot regions are stack stores.
 Seven hypotheses have now been measured on this one shape and none of them carries the gap. What is left is
 that the same instruction stream schedules worse on this particular mix of fields, and the useful thing to
 know is that **the next idea should be tested before it is believed** — the files to do it with are in
-`src/test/resources`, and `ReadAllPerf`'s twelve shapes are there to keep an explanation honest.
+`src/test/resources`, and `PerfTypeFamily`'s fifteen shapes are there to keep an explanation honest.
 
 **What is left on wide is pure IPC**: 3.087 → 2.653 over the same instruction stream, i.e. 13 % more cycles
 for slightly less work, with branch misses up 59 % (worth about a seventh of the gap). A long straight line
@@ -235,14 +285,14 @@ about it.
 Still on the table, in rough order of what a profile says:
 
 - splitting the `HandleAccess[]` walk per field kind is **done** — `PartitionedGlobReader`, one monomorphic
-  loop per kind instead of one megamorphic call site for the ~14 implementations. What is left of that cost
+  loop per kind instead of one megamorphic call site for the 14 implementations — nine typed loops, the four
+  Glob-valued kinds and the int array riding together in `others`. What is left of that cost
   is the missed inlining, and "The generated walk" above says what removing it is worth.
 - what makes `wide` the one shape the generated walk loses on. Five structural rules were refuted (see "The
   generated walk"), and what is left to look at is the compiled code itself — the gap is pure IPC over an
   identical instruction stream, so it is a decode or scheduling effect, and `-prof perfasm` on the two 45-field
   shapes that disagree (`wide` and `kinds15`) is where it would show.
-- `readStrings` is a `Map<Integer, String>`, so every interned-string read boxes its address (`IntHashMap` is
-  already imported there, unused).
+- `readStrings` is a `Map<Integer, String>`, so every interned-string read boxes its address.
 - every scalar field is boxed on its way into `DefaultGlob`'s `Object[]` — `GlobSetIntAccessor.set` takes an
   `Integer` and `setNative` is a `default` that just calls it. This is the one place globs-generate's
   *primitive* flavour would pay, and only a setter-side generated caller would collect it; the

@@ -25,10 +25,11 @@ import static org.globsframework.shared.mem.tree.TestShared.MODULO;
 /*
 What the generated walk is worth on readAll, against the PartitionedGlobReader loops.
 
-  readAll : one op = one pass over the 10 000 records of one store, which is the only path wired to the
-            generated caller (readAll without the onlyFields predicate).
-  read    : the control. A single record still goes through the partitioned reader in both arms, so this
-            number has to stay put -- if it moves, the arm is measuring something other than the walk.
+  readAll : one op = one pass over the 10 000 records of one store (readAll without the onlyFields
+            predicate, which is the walk the arm decides).
+  read    : one record, through that same walk. Since bfc7c2c a type has one GlobReader and it serves every
+            whole-record read, so the arm moves this number too -- it is no longer a control, it is what the
+            generated walk is worth when the pass is one record long.
 
 Same axes as ReadPerf : four different GlobTypes in round-robin (PerfTypeFamily) and the narrow / wide
 shapes, 15 and 45 fields. The `caller` param is the arm : JMH forks a JVM per parameter combination, so
@@ -179,7 +180,7 @@ public class ReadAllPerf {
         });
     }
 
-    /** the control : one record, which the arm does not change */
+    /** one record, on the same reader as readAll : the arm changes this one too */
     @Benchmark
     public Glob read() {
         final int f = nextFamily();
