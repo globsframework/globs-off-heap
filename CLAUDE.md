@@ -221,7 +221,7 @@ unlock flag has to come first, and HotSpot's parser takes **exactly one** commen
 the file — a second one, or one inside the JSON, is a syntax error.
 
 The walk is generated **only** when `-Dglobs.caller.toGlob=…AsmCallerWriteGeneratorService` installs a
-generating factory; `ToGlobCallerFactory.generated()` answers null otherwise and `walkReader` is the
+generating factory; `ToGlobCallerFactory.generated()` answers null otherwise and `reader` is the
 partitioned reader, unchanged. Core's looped factory is deliberately not a fallback — its typed shape is a
 reflective proxy, slower than anything here. globs-generate is a **test** dependency: main code only names
 core's SPI.

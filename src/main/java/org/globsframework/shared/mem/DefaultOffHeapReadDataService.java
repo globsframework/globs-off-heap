@@ -5,8 +5,6 @@ import org.globsframework.core.metamodel.fields.Field;
 import org.globsframework.core.model.Glob;
 import org.globsframework.core.model.GlobInstantiator;
 import org.globsframework.core.model.MutableGlob;
-import org.globsframework.core.utils.collections.ConcurrentMultiMap;
-import org.globsframework.core.utils.collections.IntHashMap;
 import org.globsframework.shared.mem.field.handleacces.HandleAccess;
 import org.globsframework.shared.mem.tree.impl.DefaultOffHeapTreeService;
 import org.globsframework.shared.mem.tree.impl.OffHeapTypeInfo;
@@ -20,7 +18,6 @@ import java.io.IOException;
 import java.lang.foreign.Arena;
 import java.lang.foreign.MemorySegment;
 import java.lang.foreign.ValueLayout;
-import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
@@ -148,7 +145,7 @@ public class DefaultOffHeapReadDataService implements OffHeapReadDataService, Re
         final long groupSize = offHeapTypeInfo.primary().groupLayout.byteSize();
         final GlobType type = offHeapTypeInfo.primary().type;
         long offset = 0;
-        final GlobReader reader = offHeapTypeInfo.primary().walkReader;
+        final GlobReader reader = offHeapTypeInfo.primary().reader;
         while (true) {
             if (offset + groupSize > dataSize) {
                 return;

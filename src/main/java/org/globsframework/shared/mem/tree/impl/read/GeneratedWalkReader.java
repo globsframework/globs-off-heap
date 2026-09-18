@@ -43,7 +43,7 @@ public final class GeneratedWalkReader {
     public static GlobReader readerFor(GlobType type, HandleAccess[] handleAccesses) {
         final ToGlobCallerFactory factory = ToGlobCallerFactory.generated();
         if (factory == null) {
-            return null;
+            return PartitionedGlobReader.create(handleAccesses);
         }
         // the purpose is constant in the source, the type is what tells two callers apart -- see CallerName
         return factory.create("offheap.readAll." + type.getName(), handleAccesses,

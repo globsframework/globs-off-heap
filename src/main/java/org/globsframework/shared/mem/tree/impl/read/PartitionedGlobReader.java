@@ -31,7 +31,6 @@ public final class PartitionedGlobReader implements GlobReader {
     private final StringFieldHandleAccess[] strings;
     private final FixSizeStringFieldHandleAccess[] fixSizeStrings;
     private final FixSize7BitsStringFieldHandleAccess[] fixSize7BitsStrings;
-    private final IntArrayFieldHandleAccess[] intArrays;
     private final HandleAccess[] others;
 
     private PartitionedGlobReader(BooleanFieldHandleAccess[] booleans, IntegerFieldHandleAccess[] integers,
@@ -40,7 +39,7 @@ public final class PartitionedGlobReader implements GlobReader {
                                   StringFieldHandleAccess[] strings,
                                   FixSizeStringFieldHandleAccess[] fixSizeStrings,
                                   FixSize7BitsStringFieldHandleAccess[] fixSize7BitsStrings,
-                                  IntArrayFieldHandleAccess[] intArrays, HandleAccess[] others) {
+                                  HandleAccess[] others) {
         this.booleans = booleans;
         this.integers = integers;
         this.longs = longs;
@@ -50,7 +49,6 @@ public final class PartitionedGlobReader implements GlobReader {
         this.strings = strings;
         this.fixSizeStrings = fixSizeStrings;
         this.fixSize7BitsStrings = fixSize7BitsStrings;
-        this.intArrays = intArrays;
         this.others = others;
     }
 
@@ -64,7 +62,6 @@ public final class PartitionedGlobReader implements GlobReader {
         final List<StringFieldHandleAccess> strings = new ArrayList<>();
         final List<FixSizeStringFieldHandleAccess> fixSizeStrings = new ArrayList<>();
         final List<FixSize7BitsStringFieldHandleAccess> fixSize7BitsStrings = new ArrayList<>();
-        final List<IntArrayFieldHandleAccess> intArrays = new ArrayList<>();
         final List<HandleAccess> others = new ArrayList<>();
         for (HandleAccess handleAccess : handleAccesses) {
             switch (handleAccess) {
@@ -77,7 +74,6 @@ public final class PartitionedGlobReader implements GlobReader {
                 case StringFieldHandleAccess a -> strings.add(a);
                 case FixSizeStringFieldHandleAccess a -> fixSizeStrings.add(a);
                 case FixSize7BitsStringFieldHandleAccess a -> fixSize7BitsStrings.add(a);
-                case IntArrayFieldHandleAccess a -> intArrays.add(a);
                 default -> others.add(handleAccess);
             }
         }
@@ -91,7 +87,6 @@ public final class PartitionedGlobReader implements GlobReader {
                 strings.toArray(StringFieldHandleAccess[]::new),
                 fixSizeStrings.toArray(FixSizeStringFieldHandleAccess[]::new),
                 fixSize7BitsStrings.toArray(FixSize7BitsStringFieldHandleAccess[]::new),
-                intArrays.toArray(IntArrayFieldHandleAccess[]::new),
                 others.toArray(HandleAccess[]::new));
     }
 
@@ -122,9 +117,6 @@ public final class PartitionedGlobReader implements GlobReader {
             access.readAtOffset(data, memorySegment, offset, readContext);
         }
         for (DateTimeFieldHandleAccess access : dateTimes) {
-            access.readAtOffset(data, memorySegment, offset, readContext);
-        }
-        for (IntArrayFieldHandleAccess access : intArrays) {
             access.readAtOffset(data, memorySegment, offset, readContext);
         }
         for (HandleAccess access : others) {

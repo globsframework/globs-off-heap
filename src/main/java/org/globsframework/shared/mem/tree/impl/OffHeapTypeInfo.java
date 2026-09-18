@@ -19,18 +19,7 @@ public class OffHeapTypeInfo {
     public final GlobType type;
     public final GroupLayout groupLayout;
     public final HandleAccess[] handleAccesses;
-    /** the read walk over {@link #handleAccesses} — every read of a whole record goes through it */
     public final GlobReader reader;
-    /**
-     * What a whole-file walk reads with : the generated class when something is installed to generate one and
-     * the type did not ask otherwise, else the same {@link #reader} every other read goes through. Shared
-     * like it, for the same reason — neither holds anything per record.
-     * <p>
-     * The generated one is the default because it is faster on most types, and {@link HeapLoopRead} is how a
-     * type whose measurement says otherwise says so. Which type that is cannot be told from its shape — see
-     * that annotation.
-     */
-    public final GlobReader walkReader;
     private final long sizeWithPadding;
     public final Field[] fields;
 
@@ -39,10 +28,12 @@ public class OffHeapTypeInfo {
         fields = type.getFields();
         this.groupLayout = groupLayout;
         this.handleAccesses = handleAccesses;
-        this.reader = PartitionedGlobReader.create(handleAccesses);
-        final GlobReader generated = type.hasAnnotation(HeapLoopRead.UNIQUE_KEY) ? null
-                : GeneratedWalkReader.readerFor(type, handleAccesses);
-        this.walkReader = generated != null ? generated : this.reader;
+        final boolean handLoop = type.hasAnnotation(HeapLoopRead.UNIQUE_KEY);
+        if (handLoop) {
+            this.reader = PartitionedGlobReader.create(handleAccesses);
+        } else {
+            this.reader = GeneratedWalkReader.readerFor(type, handleAccesses);
+        }
         this.sizeWithPadding = sizeWithPadding;
     }
 

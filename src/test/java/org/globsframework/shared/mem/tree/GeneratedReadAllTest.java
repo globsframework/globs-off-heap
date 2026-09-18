@@ -88,7 +88,7 @@ public class GeneratedReadAllTest {
     }
 
     private static GlobReader walkReaderOf(GlobType type) {
-        return typeInfoOf(type).walkReader;
+        return typeInfoOf(type).reader;
     }
 
     private static OffHeapTypeInfo typeInfoOf(GlobType type) {
@@ -110,12 +110,10 @@ public class GeneratedReadAllTest {
         installGenerator();
         final OffHeapTypeInfo typeInfo = typeInfoOf(Dummy1Type.TYPE);
 
-        Assertions.assertFalse(typeInfo.walkReader instanceof PartitionedGlobReader);
+        Assertions.assertFalse(typeInfo.reader instanceof PartitionedGlobReader);
         // it is the generated class itself, not something holding it : no adapter left
-        Assertions.assertTrue(typeInfo.walkReader.getClass().getName().startsWith("org.globsframework.gen."),
-                typeInfo.walkReader.getClass().getName());
-        Assertions.assertSame(typeInfo.walkReader, typeInfo.walkReader);
-        Assertions.assertInstanceOf(PartitionedGlobReader.class, typeInfo.reader);
+        Assertions.assertTrue(typeInfo.reader.getClass().getName().startsWith("org.globsframework.gen."),
+                typeInfo.reader.getClass().getName());
 
         final Path directory = Files.createTempDirectory("generatedReadAllShared");
         final List<Glob> written = List.of(Dummy1Type.TYPE.instantiate().set(Dummy1Type.id, 1),
@@ -146,7 +144,7 @@ public class GeneratedReadAllTest {
         final GlobType asked = builder.addAnnotation(HeapLoopRead.UNIQUE_GLOB).build();
 
         installGenerator();
-        Assertions.assertInstanceOf(PartitionedGlobReader.class, typeInfoOf(asked).walkReader);
+        Assertions.assertInstanceOf(PartitionedGlobReader.class, typeInfoOf(asked).reader);
         // the same type without the annotation gets the generated walk, so the store is the only difference
         Assertions.assertFalse(walkReaderOf(Dummy1Type.TYPE) instanceof PartitionedGlobReader);
 
