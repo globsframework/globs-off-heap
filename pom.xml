@@ -152,12 +152,12 @@
         <dependency>
             <groupId>org.globsframework</groupId>
             <artifactId>globs</artifactId>
-            <version>5.13-SNAPSHOT</version>
+            <version>5.13.0</version>
         </dependency>
         <dependency>
             <groupId>org.globsframework</groupId>
             <artifactId>globs-gson</artifactId>
-            <version>5.4-SNAPSHOT</version>
+            <version>5.4.0</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -165,7 +165,7 @@
                  -Dglobs.caller.toGlob, which main code only ever sees through core's SPI -->
             <groupId>org.globsframework</groupId>
             <artifactId>globs-generate</artifactId>
-            <version>5.5-SNAPSHOT</version>
+            <version>5.5.0</version>
             <scope>test</scope>
         </dependency>
         <dependency>
