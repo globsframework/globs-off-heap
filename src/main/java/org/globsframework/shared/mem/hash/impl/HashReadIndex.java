@@ -93,14 +93,7 @@ public class HashReadIndex {
 
     public static Glob readAndCheck(FunctionalKey functionalKey, long offset, ReadContext readContext, Predicate<Field> contains) {
         final Glob read = readContext.read(offset, contains);
-        if (read != null) {
-            for (Field field : functionalKey.getBuilder().getFields()) {
-                if (!field.valueEqual(functionalKey.getValue(field), read.getValue(field))) {
-                    return null;
-                }
-            }
-        }
-        return read;
+        return read != null && functionalKey.matches(read) ? read : null;
     }
 
     static {

@@ -42,13 +42,18 @@ public final class FixSize7BitsStringFieldHandleAccess implements HandleAccess {
         if (str == null) {
             lenAccess.writeLen(memorySegment, offset, -1);
         } else {
+            final int len;
             if (str.length() > this.maxSize) {
                 if (!this.canTruncate) {
                     throw new IllegalArgumentException("String '" + str + "' is too long for field '" + stringField.getFullName() + "' (max size: " + this.maxSize + ")");
                 }
+                len = this.maxSize;
+            } else {
+                len = str.length();
             }
-            int len = Math.min(str.length(), this.maxSize);
             lenAccess.writeLen(memorySegment, offset, len);
+
+            // replace with memorySegment.setString();
             final long base = offset + strBaseOffset;
             for (int j = 0; j < len; j++) {
                 memorySegment.set(ValueLayout.JAVA_BYTE, base + j, (byte) (str.codePointAt(j) & 0xFF));
@@ -64,6 +69,10 @@ public final class FixSize7BitsStringFieldHandleAccess implements HandleAccess {
         } else if (len == 0) {
             setAccessor.set(data, "");
         } else {
+
+            // java 27
+//            setAccessor.set(data, memorySegment.getString(offset + strBaseOffset, StandardCharsets.ISO_8859_1, len));
+
             // one bulk copy rather than len VarHandle calls into a StringBuilder. save() writes
             // codePointAt(j) & 0xFF and this used to read back (char) (c & 0xFF) : that is Latin-1 exactly,
             // and it is also the compact-String fast path, so the String wraps the bytes with no widening.
